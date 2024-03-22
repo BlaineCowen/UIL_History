@@ -1,2 +1,4 @@
 /Scrape_data/ignore
 /Scrape_data/csv_downloads
+*.csv
+uil_backup.db
