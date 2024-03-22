@@ -221,7 +221,7 @@ def main():
     ]
 
     if school_select:
-        filter_df = filter_df[filter_df["School"].isin(school_select)]
+        filter_df = filter_df[filter_df["school"].isin(school_select)]
 
     filter_df = filter_df[
         [
