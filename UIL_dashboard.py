@@ -4,6 +4,7 @@ import re
 import streamlit as st
 
 
+@st.cache_data
 def add_song_concat(df):
     score_subset = [
         "concert_score_1",
