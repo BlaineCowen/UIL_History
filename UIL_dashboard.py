@@ -67,34 +67,42 @@ def clean_data():
     df = df[df["concert_score_1"] != "DNA"]
     df = df[df["concert_score_1"].isna() == False]
     df = df[df["concert_score_1"] != "DQ"]
+    df = df[df["concert_score_1"] != 0]
 
     df = df[df["concert_score_2"] != "DNA"]
     df = df[df["concert_score_2"].isna() == False]
     df = df[df["concert_score_2"] != "DQ"]
+    df = df[df["concert_score_2"] != 0]
 
     df = df[df["concert_score_3"] != "DNA"]
     df = df[df["concert_score_3"].isna() == False]
     df = df[df["concert_score_3"] != "DQ"]
+    df = df[df["concert_score_3"] != 0]
 
     df = df[df["concert_final_score"] != "DNA"]
     df = df[df["concert_final_score"].isna() == False]
     df = df[df["concert_final_score"] != "DQ"]
+    df = df[df["concert_final_score"] != 0]
 
     df = df[df["sight_reading_score_1"] != "DNA"]
     df = df[df["sight_reading_score_1"].isna() == False]
     df = df[df["sight_reading_score_1"] != "DQ"]
+    df = df[df["sight_reading_score_1"] != 0]
 
     df = df[df["sight_reading_score_2"] != "DNA"]
     df = df[df["sight_reading_score_2"].isna() == False]
     df = df[df["sight_reading_score_2"] != "DQ"]
+    df = df[df["sight_reading_score_2"] != 0]
 
     df = df[df["sight_reading_score_3"] != "DNA"]
     df = df[df["sight_reading_score_3"].isna() == False]
     df = df[df["sight_reading_score_3"] != "DQ"]
+    df = df[df["sight_reading_score_3"] != 0]
 
     df = df[df["sight_reading_final_score"] != "DNA"]
     df = df[df["sight_reading_final_score"].isna() == False]
     df = df[df["sight_reading_final_score"] != "DQ"]
+    df = df[df["sight_reading_final_score"] != 0]
 
     # change all concert scores to int
     df["concert_score_1"] = df["concert_score_1"].astype(float).astype(int)
