@@ -75,9 +75,11 @@ Base.metadata.drop_all(mysql_engine)
 
 Base.metadata.create_all(mysql_engine)
 
+record_count = 0
 for table in [Pml, Results]:
     records = sqlite_session.query(table).all()
     for record in records:
+        record_count += 1
         # check if table is results
         if table == Results:
             # check if code_1, code_2, code_3 are None
@@ -88,6 +90,9 @@ for table in [Pml, Results]:
             if record.code_3 == "None":
                 record.code_3 = None
         mysql_session.merge(record)
+        if record_count % 100 == 0:
+
+            print(f"Records remaining: {record_count - len(records)}")
 
 mysql_session.commit()
 mysql_session.close()
