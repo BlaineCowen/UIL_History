@@ -13,12 +13,11 @@ def fix_everything():
     # replacce all column names with underscores and lower
     pml.columns = pml.columns.str.lower().str.replace(" ", "_")
 
-    pml["code"] = pml["code"].str.split("-").str[-1]
+    # check if first entry has a - in it
+    if "-" in pml["code"].iloc[0]:
+        pml["code"] = pml["code"].str.split("-").get(-1)
     # make sure code is str
     pml["code"] = pml["code"].astype(str)
-
-    # remove any duplicate code
-    pml.drop_duplicates(subset="code", inplace=True)
 
     # rename publisher_[collection] column with publisher
     pml.rename(columns={"publisher_[collection]": "publisher"}, inplace=True)
@@ -28,9 +27,7 @@ def fix_everything():
     conn = sqlite3.connect("uil.db")
 
     pml.to_sql("pml", conn, if_exists="replace", index=False)
-    # drop results table and replace it with a copy of results_with_codes tables
-    conn.execute("DROP TABLE results")
-    conn.execute("CREATE TABLE results AS SELECT * FROM results_with_codes")
+    # drop results table and replace it with a copy of results_with_codes table
 
     df = pd.read_sql_query("SELECT * FROM results", conn)
 
@@ -77,7 +74,12 @@ def fix_everything():
     df["code_3"] = df["code_3"].astype(str)
 
     # replace date with datetime in iso format
-    df["contest_date"] = pd.to_datetime(df["contest_date"], format="%m/%d/%Y").dt.date
+    try:
+        df["contest_date"] = pd.to_datetime(
+            df["contest_date"], format="%m/%d/%Y"
+        ).dt.date
+    except:
+        pass
 
     def fix_non_pml_codes(pml, df):
         # go through df and if code_1,2,3 not in pml, add it to the pml table with song and compoer and event
@@ -122,15 +124,20 @@ def fix_everything():
         # drop duplicates from pml
         pml.drop_duplicates(subset="code", inplace=True)
 
-        # update pml table
-        pml.to_sql("pml", conn, if_exists="replace", index=False)
+    # drops where code is empty or none
+    pml = pml[pml["code"] != ""]
+    pml = pml[pml["code"].notna()]
+    pml = pml[pml["code"] != "None"]
 
-        # replace table
-        df.to_sql("results", conn, if_exists="replace", index=False)
+    # update pml table
+    pml.to_sql("pml", conn, if_exists="replace", index=False)
 
-        conn.close()
+    # replace table
+    df.to_sql("results", conn, if_exists="replace", index=False)
 
-    fix_non_pml_codes(pml, df)
+    conn.close()
+
+    # fix_non_pml_codes(pml, df)
 
 
 if __name__ == "__main__":
