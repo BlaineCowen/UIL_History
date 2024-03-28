@@ -7,17 +7,23 @@ from datetime import datetime
 def fix_everything():
     # # drop duplicate entry numbers in uil.db
     conn = sqlite3.connect("uil.db")
-    pml = pd.read_sql_query("SELECT * FROM pml", conn)
-    # pml = pd.read_csv("Scrape_data/pml.csv")
+    # pml = pd.read_sql_query("SELECT * FROM pml", conn)
+    pml = pd.read_csv("Scrape_data/pml.csv")
 
     # replacce all column names with underscores and lower
     pml.columns = pml.columns.str.lower().str.replace(" ", "_")
 
+    # change code to string
+    pml["code"] = pml["code"].astype(str)
+    # remove .
+    pml["code"] = pml["code"].str.replace(".", "")
+
+    # if code is 6 digits long, remove last character
+    pml["code"] = pml["code"].apply(lambda x: x[:-1] if len(x) == 6 else x)
+
     # check if first entry has a - in it
     if "-" in pml["code"].iloc[0]:
         pml["code"] = pml["code"].str.split("-").get(-1)
-    # make sure code is str
-    pml["code"] = pml["code"].astype(str)
 
     # rename publisher_[collection] column with publisher
     pml.rename(columns={"publisher_[collection]": "publisher"}, inplace=True)
@@ -73,6 +79,11 @@ def fix_everything():
     df["code_2"] = df["code_2"].astype(str)
     df["code_3"] = df["code_3"].astype(str)
 
+    # if code is not 5 characters long, remove last character
+    df["code_1"] = df["code_1"].apply(lambda x: x[:-1] if len(x) == 6 else x)
+    df["code_2"] = df["code_2"].apply(lambda x: x[:-1] if len(x) == 6 else x)
+    df["code_3"] = df["code_3"].apply(lambda x: x[:-1] if len(x) == 6 else x)
+
     # replace date with datetime in iso format
     try:
         df["contest_date"] = pd.to_datetime(
@@ -124,10 +135,30 @@ def fix_everything():
         # drop duplicates from pml
         pml.drop_duplicates(subset="code", inplace=True)
 
+    def erase_non_pml_codes(pml, df):
+        # go through df and if code_1,2,3 not in pml, erase it from the df
+        pml["code"] = pml["code"].astype(str)
+        for i, row in df.iterrows():
+            codes = pml["code"].values
+            if row["code_1"] not in codes:
+                df.at[i, "code_1"] = None
+            if row["code_2"] not in codes:
+                df.at[i, "code_2"] = None
+            if row["code_3"] not in codes:
+                df.at[i, "code_3"] = None
+
+    erase_non_pml_codes(pml, df)
+
     # drops where code is empty or none
     pml = pml[pml["code"] != ""]
     pml = pml[pml["code"].notna()]
     pml = pml[pml["code"] != "None"]
+
+    # change grade to int
+    pml["grade"] = pd.to_numeric(pml["grade"], errors="coerce").fillna(0).astype(int)
+
+    # only take where not 0
+    pml = pml[pml["grade"] != 0]
 
     # update pml table
     pml.to_sql("pml", conn, if_exists="replace", index=False)
@@ -143,6 +174,7 @@ def fix_everything():
 if __name__ == "__main__":
     print("fixing everything")
     start_time = datetime.now()
+
     fix_everything()
     print("done")
     print(datetime.now() - start_time)

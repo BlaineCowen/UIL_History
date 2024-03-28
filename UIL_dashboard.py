@@ -49,7 +49,7 @@ def get_db(df):
     df["school_search"] = df["school_search"].str.replace(r"[^\w\s]", "")
     df["school_search"] = df["school_search"].str.replace(r" ", "")
 
-    df["event"] = df["event"].str.split("-").str.get(1)
+    # df["event"] = df["event"].str.split("-").str.get(1)
 
     # # director search
     # df["director_search"] = df["director"].str.lower()
@@ -122,10 +122,17 @@ def clean_pml(results_df):
     pml[["arranger", "composer"]] = pml[["arranger", "composer"]].fillna("")
 
     # only keep rows where event contains band, chorus, or orchestra
-    pml = pml[pml["event_name"].str.contains("Band|Chorus|Orchestra", na=False)]
+    pml = pml[
+        pml["event_name"].str.lower().str.contains("band|chorus|orchestra", na=False)
+    ]
 
     # make sure grade is int
-    pml["grade"] = pml["grade"].astype(int, errors="ignore")
+    # make sure grade is int
+    pml["grade"] = pml["grade"].astype(float).astype(int)
+
+    # remove any rows where grade is not an int
+    pml = pml[pml["grade"].isna() == False]
+
     pml["song_search"] = pml["title"].str.lower()
     pml["song_search"] = pml["song_search"].str.replace(r"[^\w\s]", "")
     pml["song_search"] = pml["song_search"].str.replace(r" ", "")
@@ -160,16 +167,7 @@ def main():
         )
 
         if event_select:
-            if "Band" in event_select:
-                filter_df = filter_df[filter_df["event"].str.contains("Band", na=False)]
-            if "Chorus" in event_select:
-                filter_df = filter_df[
-                    filter_df["event"].str.contains("Chorus", na=False)
-                ]
-            if "Orchestra" in event_select:
-                filter_df = filter_df[
-                    filter_df["event"].str.contains("Orchestra", na=False)
-                ]
+            filter_df = filter_df[filter_df["gen_event"] == event_select]
 
             if event_select == "Chorus":
                 # create new to select sub events
@@ -182,7 +180,7 @@ def main():
                 )
 
                 if sub_event_select:
-                    filter_df = filter_df[filter_df["Event"].isin(sub_event_select)]
+                    filter_df = filter_df[filter_df["event"].isin(sub_event_select)]
 
             with st.expander("Filter by schools"):
                 # tabs for type select or multiselect
@@ -397,6 +395,7 @@ def main():
         st.write("PML")
         unfiltered_pml = clean_pml(results_df)
         filtered_pml = unfiltered_pml
+
         grade_select = st.slider(
             "Select a grade",
             0,
@@ -428,71 +427,77 @@ def main():
         if event_name_select:
             filtered_pml = filtered_pml[filtered_pml["event_name"] == event_name_select]
 
+        min_performance_count = st.slider(
+            "Minimum Performance Count",
+            0,
+            100,
+            0,
+        )
+
         st.write(filtered_pml)
         st.write(len(filtered_pml))
 
-        max_x = unfiltered_pml[unfiltered_pml["performance_count"] > 10][
-            "average_concert_score"
-        ].max()
-        max_y = unfiltered_pml[unfiltered_pml["performance_count"] > 10][
-            "average_sight_reading_score"
-        ].max()
+        graphed_pml = filtered_pml[
+            # no nan values
+            (filtered_pml["average_concert_score"].notna())
+            & (filtered_pml["average_sight_reading_score"].notna())
+            # no zeros
+            & (filtered_pml["average_concert_score"] != 0)
+            & (filtered_pml["average_sight_reading_score"] != 0)
+        ]
 
-        bubble_chart_altair = (
-            alt.Chart(unfiltered_pml[unfiltered_pml["performance_count"] > 10])
-            .mark_circle()
-            .encode(
-                x=alt.X(
-                    "average_concert_score",
-                    scale=alt.Scale(type="log", domain=(1, max_x)),
-                ),
-                y=alt.Y(
-                    "average_sight_reading_score",
-                    scale=alt.Scale(type="log", domain=(1, max_y)),
-                ),
-                color=alt.Color("event_name", legend=None),
-                size=alt.Size(
-                    "performance_count", legend=None, scale=alt.Scale(range=[2, 3000])
-                ),
-                tooltip=[
-                    "title",
-                    "composer",
-                    "event_name",
-                    "average_concert_score",
-                    "average_sight_reading_score",
-                ],
+        if graphed_pml[graphed_pml["performance_count"] > min_performance_count].empty:
+            st.write("No data to graph")
+            return
+
+        else:
+
+            max_x = graphed_pml[
+                graphed_pml["performance_count"] > min_performance_count
+            ]["average_concert_score"].max()
+            max_y = graphed_pml[
+                graphed_pml["performance_count"] > min_performance_count
+            ]["average_sight_reading_score"].max()
+
+            bubble_chart_altair = (
+                alt.Chart(
+                    graphed_pml[
+                        graphed_pml["performance_count"] > min_performance_count
+                    ]
+                )
+                .mark_circle()
+                .encode(
+                    x=alt.X(
+                        "average_concert_score",
+                        scale=alt.Scale(type="log", domain=(1, max_x)),
+                    ),
+                    y=alt.Y(
+                        "average_sight_reading_score",
+                        scale=alt.Scale(type="log", domain=(1, max_y)),
+                    ),
+                    color=alt.Color("event_name", legend=None),
+                    size=alt.Size(
+                        "performance_count",
+                        legend=None,
+                        scale=alt.Scale(range=[2, 3000]),
+                    ),
+                    tooltip=[
+                        "title",
+                        "composer",
+                        "event_name",
+                        "average_concert_score",
+                        "average_sight_reading_score",
+                    ],
+                )
+                .interactive()
             )
-            .interactive()
-        )
 
-        st.altair_chart(
-            bubble_chart_altair,
-            use_container_width=True,
-        )
+            st.altair_chart(
+                bubble_chart_altair,
+                use_container_width=True,
+            )
 
-        bubble_chart_plotly = px.scatter(
-            filtered_pml,
-            x="average_concert_score",
-            y="average_sight_reading_score",
-            color="event_name",
-            size="performance_count",
-            hover_data=[
-                "title",
-                "composer",
-                "event_name",
-                "average_concert_score",
-                "average_sight_reading_score",
-            ],
-            log_x=True,
-            log_y=True,
-            range_x=[1, max_x],
-            range_y=[1, max_y],
-            color_discrete_sequence=px.colors.qualitative.Pastel,
-        )
-
-        bubble_chart_plotly.update_layout(showlegend=False)
-
-        st.plotly_chart(bubble_chart_plotly)
+            # make a chart that shows the share of the remaining songs vs all songs in the event
 
 
 if __name__ == "__main__":
