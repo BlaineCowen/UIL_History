@@ -92,62 +92,60 @@ def fix_everything():
     except:
         pass
 
-    def fix_non_pml_codes(pml, df):
-        # go through df and if code_1,2,3 not in pml, add it to the pml table with song and compoer and event
-        pml["code"] = pml["code"].astype(str)
-        for i, row in df.iterrows():
-            # check if entry number is 189541
+    # def fix_non_pml_codes(pml, df):
+    #     # go through df and if code_1,2,3 not in pml, add it to the pml table with song and compoer and event
+    #     pml["code"] = pml["code"].astype(str)
+    #     for i, row in df.iterrows():
+    #         # check if entry number is 189541
 
-            codes = pml["code"].values
+    #         codes = pml["code"].values
 
-            if row["code_1"] not in codes:
-                new_row = pd.DataFrame(
-                    {
-                        "code": [row["code_1"]],
-                        "title": [row["title_1"]],
-                        "composer": [row["composer_1"]],
-                        "event_name": [row["event"]],
-                    }
-                )
-                pml = pd.concat([pml, new_row], ignore_index=True)
-            if row["code_2"] not in codes:
-                if row["code_2"] not in codes:
-                    new_row = pd.DataFrame(
-                        {
-                            "code": [row["code_2"]],
-                            "title": [row["title_2"]],
-                            "composer": [row["composer_2"]],
-                            "event_name": [row["event"]],
-                        }
-                    )
-                    pml = pd.concat([pml, new_row], ignore_index=True)
-            if row["code_3"] not in codes:
-                new_row = pd.DataFrame(
-                    {
-                        "code": [row["code_3"]],
-                        "title": [row["title_3"]],
-                        "composer": [row["composer_3"]],
-                        "event_name": [row["event"]],
-                    }
-                )
-                pml = pd.concat([pml, new_row], ignore_index=True)
+    #         if row["code_1"] not in codes:
+    #             new_row = pd.DataFrame(
+    #                 {
+    #                     "code": [row["code_1"]],
+    #                     "title": [row["title_1"]],
+    #                     "composer": [row["composer_1"]],
+    #                     "event_name": [row["event"]],
+    #                 }
+    #             )
+    #             pml = pd.concat([pml, new_row], ignore_index=True)
+    #         if row["code_2"] not in codes:
+    #             if row["code_2"] not in codes:
+    #                 new_row = pd.DataFrame(
+    #                     {
+    #                         "code": [row["code_2"]],
+    #                         "title": [row["title_2"]],
+    #                         "composer": [row["composer_2"]],
+    #                         "event_name": [row["event"]],
+    #                     }
+    #                 )
+    #                 pml = pd.concat([pml, new_row], ignore_index=True)
+    #         if row["code_3"] not in codes:
+    #             new_row = pd.DataFrame(
+    #                 {
+    #                     "code": [row["code_3"]],
+    #                     "title": [row["title_3"]],
+    #                     "composer": [row["composer_3"]],
+    #                     "event_name": [row["event"]],
+    #                 }
+    #             )
+    #             pml = pd.concat([pml, new_row], ignore_index=True)
 
-        # drop duplicates from pml
-        pml.drop_duplicates(subset="code", inplace=True)
+    #     # drop duplicates from pml
+    #     pml.drop_duplicates(subset="code", inplace=True)
 
-    def erase_non_pml_codes(pml, df):
-        # go through df and if code_1,2,3 not in pml, erase it from the df
-        pml["code"] = pml["code"].astype(str)
-        for i, row in df.iterrows():
-            codes = pml["code"].values
-            if row["code_1"] not in codes:
-                df.at[i, "code_1"] = None
-            if row["code_2"] not in codes:
-                df.at[i, "code_2"] = None
-            if row["code_3"] not in codes:
-                df.at[i, "code_3"] = None
-
-    erase_non_pml_codes(pml, df)
+    # def erase_non_pml_codes(pml, df):
+    #     # go through df and if code_1,2,3 not in pml, erase it from the df
+    #     pml["code"] = pml["code"].astype(str)
+    #     for i, row in df.iterrows():
+    #         codes = pml["code"].values
+    #         if row["code_1"] not in codes:
+    #             df.at[i, "code_1"] = None
+    #         if row["code_2"] not in codes:
+    #             df.at[i, "code_2"] = None
+    #         if row["code_3"] not in codes:
+    #             df.at[i, "code_3"] = None
 
     # drops where code is empty or none
     pml = pml[pml["code"] != ""]

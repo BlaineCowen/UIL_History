@@ -49,13 +49,6 @@ def get_db(df):
     df["school_search"] = df["school_search"].str.replace(r"[^\w\s]", "")
     df["school_search"] = df["school_search"].str.replace(r" ", "")
 
-    # df["event"] = df["event"].str.split("-").str.get(1)
-
-    # # director search
-    # df["director_search"] = df["director"].str.lower()
-    # df["additional_director_search"] = df["additional_sirector"].str.lower()
-
-    # fill na all
     return df
 
 
@@ -125,13 +118,18 @@ def clean_pml(results_df):
     pml = pml[
         pml["event_name"].str.lower().str.contains("band|chorus|orchestra", na=False)
     ]
-
-    # make sure grade is int
-    # make sure grade is int
-    pml["grade"] = pml["grade"].astype(float).astype(int)
-
     # remove any rows where grade is not an int
     pml = pml[pml["grade"].isna() == False]
+
+    # make sure grade is int
+    try:
+        # Convert "grade" to float, filter out NaN values, then convert to int
+        pml["grade"] = pml["grade"].astype(float)
+        pml = pml[pml["grade"].notna()]
+        pml["grade"] = pml["grade"].astype(int)
+    except ValueError:
+        pml["grade"] = pml["grade"].str.extract(r"(\d+)", expand=False)
+        pml["grade"] = pml["grade"].astype(int)
 
     pml["song_search"] = pml["title"].str.lower()
     pml["song_search"] = pml["song_search"].str.replace(r"[^\w\s]", "")
@@ -272,6 +270,9 @@ def main():
                     )
                 ]
 
+            # testing
+            testing_df = filter_df
+
             filter_df = filter_df[
                 [
                     "year",
@@ -287,6 +288,9 @@ def main():
                     "sight_reading_final_score",
                 ]
             ]
+
+            st.write("testing only")
+            st.write(testing_df)
 
             st.write("Filtered Data")
 
