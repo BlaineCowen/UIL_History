@@ -123,7 +123,7 @@ def get_uil_results():
         with open("Scrape_data/urls.txt", "w") as f:
             f.write("")
         urls = []
-    for i in range(200, 10000):
+    for i in range(7000, 10000):
 
         url = f"https://www.texasmusicforms.com/csrrptUILpublic.asp?cn={i}&get=go"
 

@@ -307,7 +307,9 @@ def main():
 
             st.write("Filtered Data")
 
-            st.dataframe(filter_df)
+            # hide index
+
+            st.dataframe(filter_df, hide_index=True)
 
             # write len
             st.write("Number of rows:", len(filter_df))
@@ -473,8 +475,7 @@ def main():
             ]
         ]
 
-        st.dataframe(display_pml)
-        st.write(len(display_pml))
+        st.dataframe(display_pml, hide_index=True)
 
         graphed_pml = filtered_pml[
             # no nan values
