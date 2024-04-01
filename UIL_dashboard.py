@@ -197,7 +197,7 @@ def main():
                 # create new to select sub events
                 sub_event_select = st.multiselect(
                     "Select a sub event",
-                    filter_df[filter_df["event"].str.contains("chorus")]["event"]
+                    filter_df[filter_df["event"].str.contains("Chorus")]["event"]
                     .sort_values()
                     .unique(),
                     default=[],
@@ -288,9 +288,6 @@ def main():
                         composer_name_input, na=False
                     )
                 ]
-
-            # testing
-            testing_df = filter_df
 
             filter_df = filter_df[
                 [
