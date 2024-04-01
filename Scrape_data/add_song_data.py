@@ -7,6 +7,9 @@ from multiprocessing import Pool
 import re
 from fuzzywuzzy import process
 from fix_everything import fix_everything
+from tqdm import tqdm
+from add_performance_data import main as add_performance_data
+from multiprocessing import Manager
 
 
 def add_song_concat(pml):
@@ -15,10 +18,15 @@ def add_song_concat(pml):
     pml = pml.apply(lambda x: x.astype(str).str.replace(" ", ""))
     pml = pml.apply(lambda x: x.astype(str).str.replace(r"[^\w\s]", ""))
     # change all columns to lower case and replace spaces with _
-    pml.columns = pml.columns.str.lower().str.replace(" ", "_")
+    pml.columns = pml.columns.str.lower().str.replace(" ", "_", regex=True)
 
     # make code only the last after -
     pml["code"] = pml["code"].str.split("-").str[-1]
+    # remove any non letter or number characters
+    pml["code"] = pml["code"].replace(r"[^\w\s]", "", regex=True)
+
+    # CODE SHOULD ONLY BE 5 CHARACTERS
+    pml["code"] = pml["code"].apply(lambda x: x[:-1] if len(x) == 6 else x)
 
     # add a song_search column to the pml
     pml["song_search"] = (
@@ -61,9 +69,25 @@ def add_song_concat(pml):
 
     pml["song_search_with_specification"] = pml["song_search"] + pml["specification"]
 
+    # strip composer
+    pml["composer"] = pml["composer"].str.strip()
+
+    # if composer has a " " in it, make the last word the composer
+    pml["composer_last"] = pml["composer"].str.split(" ").str[-1]
+
+    pml["composer_no_hyphen"] = pml["composer"].str.split("-").str[-1]
+
     # make a compoer/arranger column
     pml["composer"] = (
         pml["composer"].str.lower().replace(r"[^a-zA-Z0-9]", "", regex=True)
+    )
+
+    pml["composer_last"] = (
+        pml["composer_last"].str.lower().replace(r"[^a-zA-Z0-9]", "", regex=True)
+    )
+
+    pml["composer_no_hyphen"] = (
+        pml["composer_no_hyphen"].str.lower().replace(r"[^a-zA-Z0-9]", "", regex=True)
     )
 
     # if composer is anonortrad, make it ""
@@ -88,187 +112,362 @@ def add_song_concat(pml):
         pml["event_name"].str.lower().replace(r"[^a-zA-Z]", "", regex=True)
     )
 
+    # fill na with empty string
+    pml = pml.fillna("")
+    # replace nan with empty string
+    pml = pml.replace(np.nan, "", regex=True)
+
     pml.to_sql("pml", sqlite3.connect("uil.db"), if_exists="replace")
 
     return pml
 
 
-pml = add_song_concat(pd.read_csv("Scrape_data/pml.csv", encoding="utf-8"))
+def add_concat_to_results(df):
+
+    # fill na in all title, composer, arranger, and event columns
+    df["title_1"] = df["title_1"].fillna("")
+    df["title_2"] = df["title_2"].fillna("")
+    df["title_3"] = df["title_3"].fillna("")
+    df["composer_1"] = df["composer_1"].fillna("")
+    df["composer_2"] = df["composer_2"].fillna("")
+    df["composer_3"] = df["composer_3"].fillna("")
+    df["event"] = df["event"].fillna("")
+
+    for i in range(1, 4):
+        # make song simple lower
+        df[f"title_simple_{i}"] = df[f"title_{i}"].str.lower()
+        # add column potential match if there are 5 digits inside parenthesis
+        df[f"potential_match_{i}"] = ""
+        # remove anything in parenthesis
+        df[f"title_simple_{i}"] = df[f"title_simple_{i}"].str.replace(
+            r"\(.*?\)", "", regex=True
+        )
+        # remove anything not a letter
+        df[f"title_simple_{i}"] = df[f"title_simple_{i}"].str.replace(
+            r"[^a-zA-Z]", "", regex=True
+        )
+        # get rid of spaces
+        df[f"title_simple_{i}"] = df[f"title_simple_{i}"].str.replace(" ", "")
+        # if from is in the title, remove from and anything after
+        df[f"title_simple_{i}"] = df[f"title_simple_{i}"].str.split("from").str[0]
+
+        df[f"composer_{i}"] = df[f"composer_{i}"].str.lower().str.strip()
+
+        # erase annything containing arr and anything after
+        df[f"composer_{i}"] = df[f"composer_{i}"].str.split(" arr ").str[0]
+        df[f"composer_{i}"] = df[f"composer_{i}"].str.split("arr.").str[0]
+        # strip composer
+        df[f"composer_{i}"] = df[f"composer_{i}"].str.strip()
+
+        # if composer has a /
+        mask = df[f"composer_{i}"].str.contains("/", regex=False)
+        df.loc[mask, f"composer_{i}"] = (
+            df.loc[mask, f"composer_{i}"].str.split("/").str[0].str.split(" ").str[-1]
+        )
+
+        mask = df[f"composer_{i}"].str.contains("/", regex=False)
+        df.loc[mask, f"composer_last_{i}"] = (
+            df.loc[mask, f"composer_{i}"].str.split("/").str[-1].str.split(" ").str[-1]
+        )
+
+        mask = df[f"composer_{i}"].str.contains("/", regex=False)
+        df.loc[~mask, f"composer_last_{i}"] = (
+            df.loc[~mask, f"composer_{i}"].str.split(" ").str[-1]
+        )
+
+        df[f"composer_no_hyphen_{i}"] = df[f"composer_{i}"].str.split("-").str[-1]
+
+        # remove anything not a letter
+        df[f"composer_{i}"] = df[f"composer_{i}"].str.replace(
+            r"[^a-zA-Z]", "", regex=True
+        )
+        df[f"composer_last_{i}"] = df[f"composer_last_{i}"].str.replace(
+            r"[^a-zA-Z]", "", regex=True
+        )
+        df[f"composer_no_hyphen_{i}"] = df[f"composer_no_hyphen_{i}"].str.replace(
+            r"[^a-zA-Z]", "", regex=True
+        )
+
+    # make event lower
+    df["event"] = df["event"].str.lower()
+
+    return df
 
 
-def definite_match(col, row, n, pml=pml):
+# creat function that wil group titles 1, 2, 3
+def group_titles(df):
 
-    try:
-        title_col = col.index(f"title_{n}")
-        original_title = row[title_col]
-        # title = re.sub(r"[^a-zA-Z]", "", row[title_col]).lower()
-        title = row[title_col].strip().lower()
+    grouped_df1 = df.groupby(
+        [
+            "title_simple_1",
+            "composer_1",
+            "composer_last_1",
+            "composer_no_hyphen_1",
+            "event",
+        ],
+        as_index=False,
+    ).size()
+    grouped_df2 = df.groupby(
+        [
+            "title_simple_2",
+            "composer_2",
+            "composer_last_2",
+            "composer_no_hyphen_2",
+            "event",
+        ],
+        as_index=False,
+    ).size()
+    grouped_df3 = df.groupby(
+        [
+            "title_simple_3",
+            "composer_3",
+            "composer_last_3",
+            "composer_no_hyphen_3",
+            "event",
+        ],
+        as_index=False,
+    ).size()
 
-        # if title contains 5 numbers in a row, return them as code
-        if re.search(r"\d{5}", title):
-            code = re.search(r"\d{5}", title).group(0)
-            return code
+    # rename columns to  no numbers
+    grouped_df1.columns = [
+        "title",
+        "composer",
+        "composer_last",
+        "composer_no_hyphen",
+        "event",
+        "count",
+    ]
+    grouped_df2.columns = [
+        "title",
+        "composer",
+        "composer_last",
+        "composer_no_hyphen",
+        "event",
+        "count",
+    ]
+    grouped_df3.columns = [
+        "title",
+        "composer",
+        "composer_last",
+        "composer_no_hyphen",
+        "event",
+        "count",
+    ]
 
-        # get rid of everything no a character
-        title = re.sub(r"[^a-zA-Z]", "", title)
+    # combine
+    grouped_df = pd.concat([grouped_df1, grouped_df2, grouped_df3])
 
-        # if  title contains "from" get rid of from and anything after
-        if "from" in title:
-            title = title.split("from")[0]
+    # group by title, composer, composer_last, event
+    grouped_df = grouped_df.groupby(
+        ["title", "composer", "composer_last", "composer_no_hyphen", "event"],
+        as_index=False,
+    ).sum()
 
-        composer_col = col.index(f"composer_{n}")
-        composer = row[composer_col].strip()
-        composer.replace(")", "").replace("(", "")
-        # check if composer has space
-        if " " in composer:
-            composer_last = composer.split(" ")[-1]
-            composer_last = re.sub(r"[^a-zA-Z]", "", composer_last).lower()
+    # for evernt, split after -, take last, remove spaces, and only keep letters
+    grouped_df["event"] = grouped_df["event"].str.split("-").str[-1]
+    grouped_df["event"] = grouped_df["event"].str.replace(" ", "")
+    grouped_df["event"] = grouped_df["event"].str.replace(r"[^a-zA-Z]", "", regex=True)
 
-        if "/" in composer:
-            composer = composer.split("/")[0]
-            composer_last = composer.split("/")[-1]
+    print(f"shape before: {df.shape}")
+    print(f"shape after: {grouped_df.shape}")
 
-        else:
-            composer_last = composer.lower()
+    # give each one a unique id
+    grouped_df["entry_id"] = range(1, len(grouped_df) + 1)
 
-        composer = re.sub(r"[^a-zA-Z]", "", row[composer_col]).lower()
-        composer = composer.replace("anonortrad", "")
-        composer = composer.replace("trad", "")
+    # change to str
+    grouped_df["entry_id"] = grouped_df["entry_id"].astype(str)
 
-    except Exception as e:
-        print("Error", e)
-        return None
+    df["event"] = df["event"].str.split("-").str[-1]
+    df["event"] = df["event"].str.replace(" ", "")
+    df["event"] = df["event"].str.replace(r"[^a-zA-Z]", "", regex=True)
 
-    # check if title just has a number already. it will be any 5 digit number in the title
-    if re.search(r"\d{5}", title):
-        # extract the number
-        match = re.search(r"\d{5}", title)
-        code = match.group(0)
+    df = df.merge(
+        grouped_df,
+        how="left",
+        left_on=[
+            "title_simple_1",
+            "composer_1",
+            "composer_last_1",
+            "composer_no_hyphen_1",
+            "event",
+        ],
+        right_on=["title", "composer", "composer_last", "composer_no_hyphen", "event"],
+    )
+    df["entry_id_1"] = df["entry_id"]
+    df = df.drop(
+        columns=["title", "composer", "composer_last", "composer_no_hyphen", "entry_id"]
+    )
 
-        return code
+    df = df.merge(
+        grouped_df,
+        how="left",
+        left_on=[
+            "title_simple_2",
+            "composer_2",
+            "composer_last_2",
+            "composer_no_hyphen_2",
+            "event",
+        ],
+        right_on=["title", "composer", "composer_last", "composer_no_hyphen", "event"],
+    )
+    df["entry_id_2"] = df["entry_id"]
+    df = df.drop(
+        columns=["title", "composer", "composer_last", "composer_no_hyphen", "entry_id"]
+    )
 
-    event_name = row[col.index("event")].lower().replace(" ", "")
-    # only keep text after -
-    event_name = event_name.split("-")[1]
-    # get rid of anything not a letter
-    event_name = re.sub(r"[^a-zA-Z]", "", event_name)
+    df = df.merge(
+        grouped_df,
+        how="left",
+        left_on=[
+            "title_simple_3",
+            "composer_3",
+            "composer_last_3",
+            "composer_no_hyphen_3",
+            "event",
+        ],
+        right_on=["title", "composer", "composer_last", "composer_no_hyphen", "event"],
+    )
+    df["entry_id_3"] = df["entry_id"]
+    df = df.drop(
+        columns=[
+            "title",
+            "composer",
+            "composer_last",
+            "composer_no_hyphen",
+            "entry_id",
+            "count_x",
+            "count_y",
+            "count",
+        ]
+    )
 
-    # if contains band ==band
+    grouped_df["code"] = None
+
+    # update results table
+    conn = sqlite3.connect("uil.db")
+    df.to_sql("results", conn, if_exists="replace", index=False)
+    conn.close()
+
+    return grouped_df
+
+
+def fuzzy_search(title, composer, composer_last, composer_no_hyphen, event_name, pml):
+
+    if "orchestra" in event_name:
+        event_name = "orchestra"
+
     if "band" in event_name:
         event_name = "band"
 
-    def fuzzy_search(title, composer, composer_last, event_name, pml):
-        # Fetch all rows from the table
-        df = pml
+    if "nachtigall" in title:
+        print(title)
 
-        # Filter the DataFrame based on composer, arranger, and event_name
-        df = df[
-            (
-                (df["composer_search"].str.contains(composer, regex=False))
-                | (df["arranger"].str.contains(composer, regex=False))
-                | (df["composer_search"].str.contains(composer_last, regex=False))
-                | (df["arranger"].str.contains(composer_last, regex=False))
-            )
-            & (df["event_name"] == event_name)
-        ]
+    mask = (pml["event_name"].str.contains(event_name, regex=False)) & (
+        (pml["composer_search"].str.contains(composer, regex=False))
+        | (pml["composer_search"].str.contains(composer_last, regex=False))
+        | (pml["composer_no_hyphen"].str.contains(composer, regex=False))
+        | (pml["composer_no_hyphen"].str.contains(composer_no_hyphen, regex=False))
+        | (pml["arranger"].str.contains(composer, regex=False))
+        | (pml["arranger"].str.contains(composer_last, regex=False))
+    )
 
-        # Perform fuzzy matching on the filtered DataFrame
-        choices = (
-            df["song_search"].tolist()
-            + df["song_search_with_specification"].tolist()
-            + df["song_simple"].tolist()
-        )
-
-        # check if there is title
-        if not title:
-            return None
-        best_match = process.extractOne(title, choices, score_cutoff=80)
-
-        # Check if a match was found
-        if best_match is not None:
-            # Get the row with the best match
-            result = df[
-                (df["song_search"] == best_match[0])
-                | (df["song_search_with_specification"] == best_match[0])
-                | (df["song_simple"] == best_match[0])
-            ]
-        else:
-            result = None
-            return result
-
-        return result["code"].iloc[0]
-
-    # Call the function
-    result = fuzzy_search(title, composer, composer_last, event_name, pml)
-
-    if result is not None:
-        return result
-    else:
+    possible_match_df = pml[mask]
+    if len(possible_match_df) == 0:
         return None
 
+    if len(possible_match_df) == 1:
+        return possible_match_df["code"].iloc[0]
 
-def process_row_exact(row_with_columns):
+    else:
+        choices = (
+            possible_match_df["song_search"].tolist()
+            + possible_match_df["song_search_with_specification"].tolist()
+            + possible_match_df["song_simple"].tolist()
+        )
 
-    # if entry number mod 100 == 0, print entry number
-    if row_with_columns[1][row_with_columns[0].index("entry_number")] % 100 == 0:
-        print(row_with_columns[1][row_with_columns[0].index("entry_number")])
+        best_match = process.extractOne(title, choices, score_cutoff=80)
+        if best_match is not None:
+            result = possible_match_df[
+                (possible_match_df["song_search"] == best_match[0])
+                | (possible_match_df["song_search_with_specification"] == best_match[0])
+                | (possible_match_df["song_simple"] == best_match[0])
+            ]
+            if not result.empty:
+                result = result.sort_values(by="grade", ascending=False)
+                return result["code"].iloc[0]
+    return None
 
-    columns, row = row_with_columns
-    try:
-        for n in range(1, 4):
-            code_index = columns.index(f"code_{n}")
-            # if the code is already there, skip
-            if row[code_index]:
-                continue
 
-            code = definite_match(columns, row, n)
-            row[code_index] = code
+def process_row_exact(args):
 
-    except Exception as e:
-        print("Error", e)
+    # Unpack the arguments
+    col, row, pml, lock = args
 
-    entry_number = row[columns.index("entry_number")]
+    code_index = col.index("code")
+
+    title = row[col.index("title")]
+    composer = row[col.index("composer")]
+    composer_last = row[col.index("composer_last")]
+    event_name = row[col.index("event")]
+    composer_no_hyphen = row[col.index("composer_no_hyphen")]
+
+    # if title is empty return
+    if not title:
+        return None
+
+    if not composer and not composer_last:
+        return None
+
+    if not event_name:
+        return None
+
+    code = fuzzy_search(
+        title, composer, composer_last, composer_no_hyphen, event_name, pml
+    )
+
+    if code is None:
+        return None
+
     # update the results_with_codes table using the entry_number
     try:
 
-        conn = sqlite3.connect("uil.db")
-        # Create a cursor
-        c = conn.cursor()
+        lock.acquire()
 
-        # Extract data from 'row' variable (assuming it's properly defined elsewhere)
-        code1_value = row[columns.index("code_1")]
-        code2_value = row[columns.index("code_2")]
-        code3_value = row[columns.index("code_3")]
+        try:
+            conn = sqlite3.connect("uil.db")
+            # Create a cursor
+            c = conn.cursor()
 
-        c.execute(
-            "UPDATE results_with_codes SET code_1 = ?, code_2 = ?, code_3 = ? WHERE entry_number = ?",
-            (code1_value, code2_value, code3_value, str(entry_number)),
-        )
+            # set current row in unique_entries to have the code
+            c.execute(
+                f'UPDATE unique_entries SET code = "{code}" WHERE entry_id = {row[col.index("entry_id")]}'
+            )
 
-        # Commit the changes
-        conn.commit()
+            # also update the results table
+            for i in range(1, 4):
+                c.execute(
+                    f'UPDATE results SET code_{i} = "{code}" WHERE entry_id_{i} = {row[col.index("entry_id")]}'
+                )
 
-        # Fetch the updated row for verification
-        updated = c.execute(
-            "SELECT * FROM results_with_codes WHERE entry_number = ?",
-            (entry_number,),
-        ).fetchone()
+            # Commit the changes
+            conn.commit()
 
-        # Return columns and row (assuming this is necessary)
-        return columns, row
-
-    except sqlite3.Error as e:
-        # Handle any errors that occur during execution
-        print("SQLite error:", e)
+        except sqlite3.Error as e:
+            print("Error", e)
+        finally:
+            conn.close()
+        lock.release()
+    except Exception as e:
+        print("Error", e)
 
 
-if __name__ == "__main__":
+def main():
+    start_time = pd.Timestamp.now()
+    # Create a manager
+    manager = Manager()
 
-    # change results table column names to lower case and replace spaces with _
-
-    num_processes = 6
-
-    pool = Pool(processes=num_processes)
+    # Create a lock
+    lock = manager.Lock()
 
     # connect to db
     conn = sqlite3.connect("uil.db")
@@ -289,44 +488,88 @@ if __name__ == "__main__":
     uil_data = uil_data.reset_index(drop=True)
     uil_data.to_sql("results", conn, if_exists="replace", index=False)
 
-    # if results_with_codes does n ot exist, create it. It is a copy of results with code_1, 2, 3
-
     try:
         uil_data = pd.read_sql(
-            'SELECT * FROM results_with_codes WHERE "code_1" is NULL OR "code_2" is NULL or "code_3" is NULL',
-            sqlite3.connect("uil.db"),
+            'SELECT * FROM results WHERE "code_1" like "none" OR "code_2" like "none" or "code_3" like "none" or "code_1" is null or "code_2" is null or "code_3" is null  or "code_1" = "" or "code_2" = "" or "code_3" = ""',
+            conn,
         )
-    except:
-        # create results_with_codes table
-        uil_data.to_sql("results_with_codes", conn, if_exists="replace", index=False)
 
-    # randomize index of uil_data
-    # uil_data = uil_data.sample(frac=1)
-    # sort by entry number
-    uil_data = uil_data.sort_values("entry_number")
+    except sqlite3.OperationalError as e:
+        print("Error", e)
+
+    # if code is none fill ''
+    uil_data["code_1"] = uil_data["code_1"].fillna("")
+    uil_data["code_2"] = uil_data["code_2"].fillna("")
+    uil_data["code_3"] = uil_data["code_3"].fillna("")
 
     # close connection
     conn.close()
 
+    uil_data = add_concat_to_results(uil_data)
+
+    # save with pandas
+    conn = sqlite3.connect("uil.db")
+    uil_data.to_sql("results", conn, if_exists="replace", index=False)
+    conn.close()
+
     columns = uil_data.columns.to_list()
+
+    # sort so 145676 is first entry
+    uil_data = uil_data.sort_values("entry_number", ascending=False)
 
     pml = add_song_concat(pd.read_csv("Scrape_data/pml.csv", encoding="utf-8"))
 
     # create pml table
 
-    # time
-    start_time = pd.Timestamp.now()
-    rows_with_columns = [(columns, list(row)) for row in uil_data.to_numpy()]
-    processed_results = pool.map(process_row_exact, rows_with_columns)
+    conn = sqlite3.connect("uil.db")
 
-    pool.close()
-    pool.join()
+    unique_entries = group_titles(uil_data)
+    # add unique codes as table to db
+    unique_entries.reset_index(drop=True, inplace=True)
+    # try to drop level_0
+    try:
+        unique_entries.drop("level_0", axis=1, inplace=True)
+    except:
+        pass
+    unique_entries.to_sql(
+        "unique_entries",
+        sqlite3.connect("uil.db"),
+        if_exists="replace",
+    )
+
+    # only get unique entries where code is none
+    try:
+        unique_entries = unique_entries[
+            (unique_entries["code"] == "") | (unique_entries["code"].isnull())
+        ]
+    except:
+        pass
+
+    args = [
+        (row._fields, tuple(row), pml, lock)
+        for row in unique_entries.itertuples(index=False)
+    ]
 
     print(pd.Timestamp.now() - start_time)
 
-    # time
-    start_time = pd.Timestamp.now()
-    fix_everything()
-    print(pd.Timestamp.now() - start_time)
+    with Pool(8) as pool, Manager() as manager:
+        # Create a shared list to store results
+        result_list = manager.list()
 
-    # close the connection
+        # Define a callback function to update the progress bar
+        def update(*a):
+            pbar.update()
+
+        # Add pml and lock as arguments to each element in rows_with_columns
+
+        with tqdm(total=len(unique_entries)) as pbar:
+            for _ in pool.imap_unordered(process_row_exact, args):
+                update()
+
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()
+    add_performance_data()
+    print("done")

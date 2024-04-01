@@ -2,3 +2,4 @@
 /Scrape_data/csv_downloads
 *.csv
 uil_backup.db
+launch.json

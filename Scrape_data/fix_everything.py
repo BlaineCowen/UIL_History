@@ -7,18 +7,23 @@ from datetime import datetime
 def fix_everything():
     # # drop duplicate entry numbers in uil.db
     conn = sqlite3.connect("uil.db")
-    pml = pd.read_sql_query("SELECT * FROM pml", conn)
-    # pml = pd.read_csv("Scrape_data/pml.csv")
+    # pml = pd.read_sql_query("SELECT * FROM pml", conn)
+    pml = pd.read_csv("Scrape_data/pml.csv")
 
     # replacce all column names with underscores and lower
     pml.columns = pml.columns.str.lower().str.replace(" ", "_")
 
-    pml["code"] = pml["code"].str.split("-").str[-1]
-    # make sure code is str
+    # change code to string
     pml["code"] = pml["code"].astype(str)
+    # remove .
+    pml["code"] = pml["code"].str.replace(".", "")
 
-    # remove any duplicate code
-    pml.drop_duplicates(subset="code", inplace=True)
+    # if code is 6 digits long, remove last character
+    pml["code"] = pml["code"].apply(lambda x: x[:-1] if len(x) == 6 else x)
+
+    # check if first entry has a - in it
+    if "-" in pml["code"].iloc[0]:
+        pml["code"] = pml["code"].str.split("-").get(-1)
 
     # rename publisher_[collection] column with publisher
     pml.rename(columns={"publisher_[collection]": "publisher"}, inplace=True)
@@ -28,9 +33,7 @@ def fix_everything():
     conn = sqlite3.connect("uil.db")
 
     pml.to_sql("pml", conn, if_exists="replace", index=False)
-    # drop results table and replace it with a copy of results_with_codes tables
-    conn.execute("DROP TABLE results")
-    conn.execute("CREATE TABLE results AS SELECT * FROM results_with_codes")
+    # drop results table and replace it with a copy of results_with_codes table
 
     df = pd.read_sql_query("SELECT * FROM results", conn)
 
@@ -76,66 +79,100 @@ def fix_everything():
     df["code_2"] = df["code_2"].astype(str)
     df["code_3"] = df["code_3"].astype(str)
 
+    # if code is not 5 characters long, remove last character
+    df["code_1"] = df["code_1"].apply(lambda x: x[:-1] if len(x) == 6 else x)
+    df["code_2"] = df["code_2"].apply(lambda x: x[:-1] if len(x) == 6 else x)
+    df["code_3"] = df["code_3"].apply(lambda x: x[:-1] if len(x) == 6 else x)
+
     # replace date with datetime in iso format
-    df["contest_date"] = pd.to_datetime(df["contest_date"], format="%m/%d/%Y").dt.date
+    try:
+        df["contest_date"] = pd.to_datetime(
+            df["contest_date"], format="%m/%d/%Y"
+        ).dt.date
+    except:
+        pass
 
-    def fix_non_pml_codes(pml, df):
-        # go through df and if code_1,2,3 not in pml, add it to the pml table with song and compoer and event
-        pml["code"] = pml["code"].astype(str)
-        for i, row in df.iterrows():
-            # check if entry number is 189541
+    # def fix_non_pml_codes(pml, df):
+    #     # go through df and if code_1,2,3 not in pml, add it to the pml table with song and compoer and event
+    #     pml["code"] = pml["code"].astype(str)
+    #     for i, row in df.iterrows():
+    #         # check if entry number is 189541
 
-            codes = pml["code"].values
+    #         codes = pml["code"].values
 
-            if row["code_1"] not in codes:
-                new_row = pd.DataFrame(
-                    {
-                        "code": [row["code_1"]],
-                        "title": [row["title_1"]],
-                        "composer": [row["composer_1"]],
-                        "event_name": [row["event"]],
-                    }
-                )
-                pml = pd.concat([pml, new_row], ignore_index=True)
-            if row["code_2"] not in codes:
-                if row["code_2"] not in codes:
-                    new_row = pd.DataFrame(
-                        {
-                            "code": [row["code_2"]],
-                            "title": [row["title_2"]],
-                            "composer": [row["composer_2"]],
-                            "event_name": [row["event"]],
-                        }
-                    )
-                    pml = pd.concat([pml, new_row], ignore_index=True)
-            if row["code_3"] not in codes:
-                new_row = pd.DataFrame(
-                    {
-                        "code": [row["code_3"]],
-                        "title": [row["title_3"]],
-                        "composer": [row["composer_3"]],
-                        "event_name": [row["event"]],
-                    }
-                )
-                pml = pd.concat([pml, new_row], ignore_index=True)
+    #         if row["code_1"] not in codes:
+    #             new_row = pd.DataFrame(
+    #                 {
+    #                     "code": [row["code_1"]],
+    #                     "title": [row["title_1"]],
+    #                     "composer": [row["composer_1"]],
+    #                     "event_name": [row["event"]],
+    #                 }
+    #             )
+    #             pml = pd.concat([pml, new_row], ignore_index=True)
+    #         if row["code_2"] not in codes:
+    #             if row["code_2"] not in codes:
+    #                 new_row = pd.DataFrame(
+    #                     {
+    #                         "code": [row["code_2"]],
+    #                         "title": [row["title_2"]],
+    #                         "composer": [row["composer_2"]],
+    #                         "event_name": [row["event"]],
+    #                     }
+    #                 )
+    #                 pml = pd.concat([pml, new_row], ignore_index=True)
+    #         if row["code_3"] not in codes:
+    #             new_row = pd.DataFrame(
+    #                 {
+    #                     "code": [row["code_3"]],
+    #                     "title": [row["title_3"]],
+    #                     "composer": [row["composer_3"]],
+    #                     "event_name": [row["event"]],
+    #                 }
+    #             )
+    #             pml = pd.concat([pml, new_row], ignore_index=True)
 
-        # drop duplicates from pml
-        pml.drop_duplicates(subset="code", inplace=True)
+    #     # drop duplicates from pml
+    #     pml.drop_duplicates(subset="code", inplace=True)
 
-        # update pml table
-        pml.to_sql("pml", conn, if_exists="replace", index=False)
+    # def erase_non_pml_codes(pml, df):
+    #     # go through df and if code_1,2,3 not in pml, erase it from the df
+    #     pml["code"] = pml["code"].astype(str)
+    #     for i, row in df.iterrows():
+    #         codes = pml["code"].values
+    #         if row["code_1"] not in codes:
+    #             df.at[i, "code_1"] = None
+    #         if row["code_2"] not in codes:
+    #             df.at[i, "code_2"] = None
+    #         if row["code_3"] not in codes:
+    #             df.at[i, "code_3"] = None
 
-        # replace table
-        df.to_sql("results", conn, if_exists="replace", index=False)
+    # drops where code is empty or none
+    pml = pml[pml["code"] != ""]
+    pml = pml[pml["code"].notna()]
+    pml = pml[pml["code"] != "None"]
 
-        conn.close()
+    # change grade to int
+    pml["grade"] = pd.to_numeric(pml["grade"], errors="coerce").fillna(0).astype(int)
 
-    fix_non_pml_codes(pml, df)
+    # only take where not 0
+    pml = pml[pml["grade"] != 0]
+
+    # update pml table
+    pml.to_sql("pml", conn, if_exists="replace", index=False)
+
+    # replace table
+    df.to_sql("results", conn, if_exists="replace", index=False)
+
+    conn.close()
+
+    # fix_non_pml_codes(pml, df)
 
 
 if __name__ == "__main__":
     print("fixing everything")
     start_time = datetime.now()
+
     fix_everything()
     print("done")
     print(datetime.now() - start_time)

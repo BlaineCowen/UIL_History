@@ -2,10 +2,12 @@ import pandas as pd
 import sqlite3
 import re
 import streamlit as st
+import plotly as py
+import altair as alt
+import plotly.express as px
 
 
-@st.cache_data
-def add_song_concat(df):
+def get_db(df):
     score_subset = [
         "concert_score_1",
         "concert_score_2",
@@ -16,6 +18,16 @@ def add_song_concat(df):
         "sight_reading_score_3",
         "sight_reading_final_score",
     ]
+
+    # make sure year is int
+    df["year"] = df["year"].astype(int)
+
+    # fix event col
+    df["event"] = df["event"].str.replace("tenorbasschorus", "Tenor-Bass Chorus")
+    df["event"] = df["event"].str.replace("mixedchorus", "Mixed Chorus")
+    df["event"] = df["event"].str.replace("stringorchestra", "String Orchestra")
+    df["event"] = df["event"].str.replace("fullorchestra", "Full Orchestra")
+    df["event"] = df["event"].str.replace("treblechorus", "Treble Chorus")
 
     # drop any rows where all scores are na
     df = df.dropna(subset=score_subset, how="all")
@@ -42,20 +54,19 @@ def add_song_concat(df):
     df["song_concat"] = df["song_concat"].str.lower()
     df["composer_concat"] = df["composer_concat"].str.lower()
 
-    # # director search
-    # df["director_search"] = df["director"].str.lower()
-    # df["additional_director_search"] = df["additional_sirector"].str.lower()
-
-    # fill na all
+    # fix school names
+    df["school_search"] = df["school"].str.strip().str.lower()
+    df["school_search"] = df["school_search"].str.replace(r"[^\w\s]", "")
+    df["school_search"] = df["school_search"].str.replace(r" ", "")
 
     return df
 
 
+@st.cache_data
 def clean_data():
     df = pd.read_sql("SELECT * FROM results", sqlite3.connect("uil.db"))
-
     # remove anywhere where concert score 1 is not a number
-    df = add_song_concat(df)
+    df = get_db(df)
 
     # fix date
     df["contest_date"] = pd.to_datetime(df["contest_date"], errors="coerce")
@@ -63,45 +74,13 @@ def clean_data():
     # change contest_date to just the year
     df["year"] = df["contest_date"].dt.year.astype(str)
 
-    # remove anywhere where concert score 1 is dna
-    df = df[df["concert_score_1"] != "DNA"]
-    df = df[df["concert_score_1"].isna() == False]
-    df = df[df["concert_score_1"] != "DQ"]
     df = df[df["concert_score_1"] != 0]
-
-    df = df[df["concert_score_2"] != "DNA"]
-    df = df[df["concert_score_2"].isna() == False]
-    df = df[df["concert_score_2"] != "DQ"]
     df = df[df["concert_score_2"] != 0]
-
-    df = df[df["concert_score_3"] != "DNA"]
-    df = df[df["concert_score_3"].isna() == False]
-    df = df[df["concert_score_3"] != "DQ"]
     df = df[df["concert_score_3"] != 0]
-
-    df = df[df["concert_final_score"] != "DNA"]
-    df = df[df["concert_final_score"].isna() == False]
-    df = df[df["concert_final_score"] != "DQ"]
     df = df[df["concert_final_score"] != 0]
-
-    df = df[df["sight_reading_score_1"] != "DNA"]
-    df = df[df["sight_reading_score_1"].isna() == False]
-    df = df[df["sight_reading_score_1"] != "DQ"]
     df = df[df["sight_reading_score_1"] != 0]
-
-    df = df[df["sight_reading_score_2"] != "DNA"]
-    df = df[df["sight_reading_score_2"].isna() == False]
-    df = df[df["sight_reading_score_2"] != "DQ"]
     df = df[df["sight_reading_score_2"] != 0]
-
-    df = df[df["sight_reading_score_3"] != "DNA"]
-    df = df[df["sight_reading_score_3"].isna() == False]
-    df = df[df["sight_reading_score_3"] != "DQ"]
     df = df[df["sight_reading_score_3"] != 0]
-
-    df = df[df["sight_reading_final_score"] != "DNA"]
-    df = df[df["sight_reading_final_score"].isna() == False]
-    df = df[df["sight_reading_final_score"] != "DQ"]
     df = df[df["sight_reading_final_score"] != 0]
 
     # change all concert scores to int
@@ -141,125 +120,454 @@ def clean_data():
     return df
 
 
+def clean_pml(results_df):
+    pml = pd.read_sql("SELECT * FROM pml", sqlite3.connect("uil.db"))
+    pml[["arranger", "composer"]] = pml[["arranger", "composer"]].fillna("")
+
+    # only keep rows where event contains band, chorus, or orchestra
+    pml = pml[
+        pml["event_name"].str.lower().str.contains("band|chorus|orchestra", na=False)
+    ]
+
+    # change fullorchestra to Full Orchestra
+    pml["event_name"] = (
+        pml["event_name"]
+        .str.replace("fullorchestra", "Full Orchestra")
+        .str.replace("mixedchorus", "Mixed Chorus")
+        .str.replace("stringorchestra", "String Orchestra")
+        .str.replace("tenorbasschorus", "Tenor-Bass Chorus")
+        .str.replace("treblechorus", "Treble Chorus")
+        .str.title()
+    )
+
+    # drop and steelband rows
+    pml = pml[~pml["event_name"].str.contains("steelband", na=False)]
+
+    # remove any rows where grade is not an int
+    pml = pml[pml["grade"].isna() == False]
+
+    # make sure grade is int
+    try:
+        # Convert "grade" to float, filter out NaN values, then convert to int
+        pml["grade"] = pml["grade"].astype(float)
+        pml = pml[pml["grade"].notna()]
+        pml["grade"] = pml["grade"].astype(int)
+    except ValueError:
+        pml["grade"] = pml["grade"].str.extract(r"(\d+)", expand=False)
+        pml["grade"] = pml["grade"].astype(int)
+
+    pml["song_search"] = pml["title"].str.lower()
+    pml["song_search"] = pml["song_search"].str.replace(r"[^\w\s]", "")
+    pml["song_search"] = pml["song_search"].str.replace(r" ", "")
+
+    pml["composer_search"] = pml["composer"].str.lower() + pml["arranger"].str.lower()
+    pml["composer_search"] = pml["composer_search"].str.replace(r"[^\w\s]", "")
+
+    pml["total_search"] = pml["song_search"] + pml["composer_search"]
+    pml["total_search"] = pml["total_search"].str.replace(r"[^\w\s]", "")
+    pml["total_search"] = pml["total_search"].str.replace(r" ", "")
+
+    return pml
+
+
 def main():
     st.title("UIL Dashboard")
     st.write(
         "Welcome to the UIL Dashboard. This dashboard is designed to help track UIL Concert and SR results from the state of Texas."
     )
-    st.write("Please select an option from the sidebar to begin.")
-    # remove anywhere where concert_1 is not a number
-    df = clean_data()
+    st.write("Please select an event to begin.")
+    results_df = clean_data()
 
-    event_select = st.sidebar.selectbox(
-        "Select an event",
-        ["Band", "Chorus", "Orchestra"],
-        index=None,
-    )
+    tab1, tab2 = st.tabs(["C&SR Results", "PML"])
 
-    if event_select:
-        if "Band" in event_select:
-            df = df[df["event"].str.contains("Band", na=False)]
-        if "Chorus" in event_select:
-            df = df[df["event"].str.contains("Chorus", na=False)]
-        if "Orchestra" in event_select:
-            df = df[df["event"].str.contains("Orchestra", na=False)]
+    with tab1:
+        # remove anywhere where concert_1 is not a number
+        filter_df = results_df
 
-        # create new sidebar to select sub events
-        sub_event_select = st.sidebar.multiselect(
-            "Select a sub event",
-            df["event"].sort_values().unique(),
-            default=[],
+        event_select = st.selectbox(
+            "Select an event",
+            ["Band", "Chorus", "Orchestra"],
+            index=None,
         )
 
-        if sub_event_select:
-            df = df[df["Event"].isin(sub_event_select)]
+        if event_select:
+            filter_df = filter_df[filter_df["gen_event"] == event_select]
 
-    school_select = st.sidebar.multiselect(
-        "Select a school",
-        df["school"].sort_values().unique(),
-        default=[],
-    )
+            if event_select == "Chorus":
+                # create new to select sub events
+                sub_event_select = st.multiselect(
+                    "Select a sub event",
+                    filter_df[filter_df["event"].str.contains("chorus")]["event"]
+                    .sort_values()
+                    .unique(),
+                    default=[],
+                )
 
-    school_level_select = st.sidebar.selectbox(
-        "Select a school level",
-        df["school_level"].sort_values().unique(),
-        index=None,
-    )
-    song_name_input = st.sidebar.text_input("Enter a song name", "")
-    song_name_input = song_name_input.lower()
-    song_name_input = re.sub(r"\s+", "", song_name_input)
+                if sub_event_select:
+                    filter_df = filter_df[filter_df["event"].isin(sub_event_select)]
 
-    composer_name_input = st.sidebar.text_input("Enter a composer name", "")
-    composer_name_input = composer_name_input.lower()
-    composer_name_input = re.sub(r"\s+", "", composer_name_input)
+            with st.expander("Filter by schools"):
 
-    # director_select = st.sidebar.text_input("Enter a director name", "")
-    # director_select = director_select.lower()
+                school_select = st.text_input("Enter a school name", "")
+                school_select = school_select.lower()
+                school_select = re.sub(r"\s+", "", school_select)
 
-    # if director_select:
+                if school_select:
+                    filter_df = filter_df[
+                        filter_df["school_search"].str.contains(school_select, na=False)
+                    ]
 
-    #     df = df[df["Director_search"].str.contains(director_select, na=False)]
+            with st.expander("Filter by Levels"):
 
-    if school_level_select:
-        df = df[df["school_level"].str.contains(school_level_select, na=False)]
+                school_level_select = st.selectbox(
+                    "Select a school level",
+                    filter_df["school_level"].sort_values().unique(),
+                    index=None,
+                )
 
-        conference_select = st.sidebar.multiselect(
-            "Select a conference",
-            df["conference"].sort_values().unique(),
-            default=[],
+                if school_level_select:
+
+                    filter_df = filter_df[
+                        filter_df["school_level"].str.contains(
+                            school_level_select, na=False
+                        )
+                    ]
+
+                    conference_select = st.multiselect(
+                        "Select a conference",
+                        filter_df["conference"].sort_values().unique(),
+                        default=[],
+                    )
+                    if conference_select:
+                        filter_df = filter_df[
+                            filter_df["conference"].isin(conference_select)
+                        ]
+
+                classification_select = st.selectbox(
+                    "Select a classification",
+                    filter_df["classification"].sort_values().unique(),
+                    index=None,
+                )
+
+                if classification_select:
+                    filter_df = filter_df[
+                        filter_df["classification"] == classification_select
+                    ]
+
+            with st.expander("Filter by song name and composer"):
+                song_name_input = st.text_input("Enter a song name", "")
+                song_name_input = song_name_input.lower()
+                song_name_input = re.sub(r"\s+", "", song_name_input)
+
+                composer_name_input = st.text_input("Enter a composer name", "")
+                composer_name_input = composer_name_input.lower()
+                composer_name_input = re.sub(r"\s+", "", composer_name_input)
+
+            # director_select = st.sidebar.text_input("Enter a director name", "")
+            # director_select = director_select.lower()
+
+            # if director_select:
+
+            #     filter_df = filter_df[filter_df["Director_search"].str.contains(director_select, na=False)]
+
+            year_select = st.slider("Year Range", 2005, 2024, (2005, 2024))
+
+            if year_select:
+                filter_df = filter_df[
+                    filter_df["year"].between(str(year_select[0]), str(year_select[1]))
+                ]
+
+            if song_name_input or composer_name_input:
+                # only show rows where song name is in song_concat
+                filter_df = results_df[
+                    results_df["song_concat"].str.contains(song_name_input, na=False)
+                ]
+                # only show rows where composer name is in composer_concat
+                filter_df = filter_df[
+                    filter_df["composer_concat"].str.contains(
+                        composer_name_input, na=False
+                    )
+                ]
+
+            # testing
+            testing_df = filter_df
+
+            filter_df = filter_df[
+                [
+                    "year",
+                    "event",
+                    "school",
+                    "director",
+                    "additional_director",
+                    "classification",
+                    "choice_1",
+                    "choice_2",
+                    "choice_3",
+                    "concert_final_score",
+                    "sight_reading_final_score",
+                ]
+            ]
+
+            st.write("Filtered Data")
+
+            st.dataframe(filter_df)
+
+            # write len
+            st.write("Number of rows:", len(filter_df))
+
+            # make a scores over time
+            st.write("Concert Scores Over Time")
+            scores_over_time_c = (
+                filter_df.groupby("year")["concert_final_score"].mean().sort_index()
+            )
+            scores_over_time_c2 = (
+                results_df[results_df["gen_event"].str.contains(event_select)]
+                .groupby("year")["concert_final_score"]
+                .mean()
+                .sort_index()
+            )
+
+            import plotly.graph_objs as go
+
+            line_chart_c = go.Figure(
+                data=[
+                    go.Scatter(
+                        x=list(range(year_select[0], year_select[1] + 1)),
+                        y=scores_over_time_c.values,
+                        mode="lines",
+                        name="Selected Results",
+                    ),
+                    go.Scatter(
+                        x=list(range(year_select[0], year_select[1] + 1)),
+                        y=scores_over_time_c2.values,
+                        mode="lines",
+                        name="All Results",
+                    ),
+                ]
+            )
+
+            st.plotly_chart(line_chart_c)
+
+            st.write("Sight Reading Scores Over Time")
+            scores_over_time_sr = filter_df.groupby("year")[
+                "sight_reading_final_score"
+            ].mean()
+
+            scores_over_time_sr2 = (
+                results_df[results_df["gen_event"].str.contains(event_select)]
+                .groupby("year")["sight_reading_final_score"]
+                .mean()
+                .sort_index()
+            )
+
+            line_chart_sr = py.graph_objs.Figure(
+                data=[
+                    py.graph_objs.Scatter(
+                        x=list(range(year_select[0], year_select[1] + 1)),
+                        y=scores_over_time_sr.values,
+                        mode="lines",
+                        name="Selected Results",
+                    ),
+                    py.graph_objs.Scatter(
+                        x=list(range(year_select[0], year_select[1] + 1)),
+                        y=scores_over_time_sr2.values,
+                        mode="lines",
+                        name="All Results",
+                    ),
+                ]
+            )
+
+            st.plotly_chart(line_chart_sr)
+
+            # create a pie chart of the concert scores
+            st.write("Concert Scores")
+            concert_scores = filter_df["concert_final_score"].value_counts()
+            pie_chart_c = py.graph_objs.Figure(
+                data=[
+                    py.graph_objs.Pie(
+                        labels=concert_scores.index,
+                        values=concert_scores.values,
+                        hole=0.5,
+                    )
+                ]
+            )
+            st.plotly_chart(pie_chart_c)
+
+            sight_reading_scores = filter_df["sight_reading_final_score"].value_counts()
+            st.write("Sight Reading Scores")
+            pie_chart_SR = py.graph_objs.Figure(
+                data=[
+                    py.graph_objs.Pie(
+                        labels=sight_reading_scores.index,
+                        values=sight_reading_scores.values,
+                        hole=0.5,
+                    )
+                ]
+            )
+            st.plotly_chart(pie_chart_SR)
+
+        # # write len
+        # st.write("Number of rows:", len(df))
+
+        st.write(
+            "This dashboard was created by [Blaine Cowen](mailto:blaine.cowen@gmail.com)"
         )
 
-        if conference_select:
-            df = df[df["conference"].isin(conference_select)]
+    with tab2:
+        st.write("PML")
+        unfiltered_pml = clean_pml(results_df)
+        filtered_pml = unfiltered_pml
 
-    classification_select = st.sidebar.selectbox(
-        "Select a classification",
-        df["classification"].sort_values().unique(),
-        index=None,
-    )
+        grade_select = st.slider(
+            "Select a grade",
+            0,
+            6,
+            (0, 6),
+        )
+        # filter by grade
+        if grade_select:
+            filtered_pml = filtered_pml[
+                (filtered_pml["grade"] >= grade_select[0])
+                & (filtered_pml["grade"] <= grade_select[1])
+            ]
 
-    if classification_select:
-        df = df[df["classification"] == classification_select]
+        song_name_input = st.text_input("Search Titles or Composers", "")
+        song_name_input = song_name_input.lower()
+        song_name_input = re.sub(r"\s+", "", song_name_input)
 
-    # only show rows where song name is in song_concat
-    filter_df = df[df["song_concat"].str.contains(song_name_input, na=False)]
-    # only show rows where composer name is in composer_concat
-    filter_df = filter_df[
-        filter_df["composer_concat"].str.contains(composer_name_input, na=False)
-    ]
+        if song_name_input:
+            filtered_pml = filtered_pml[
+                filtered_pml["total_search"].str.contains(song_name_input, na=False)
+            ]
 
-    if school_select:
-        filter_df = filter_df[filter_df["school"].isin(school_select)]
+        event_name_select = st.selectbox(
+            "Select an event",
+            filtered_pml["event_name"].sort_values().unique(),
+            index=None,
+        )
 
-    filter_df = filter_df[
-        [
-            "year",
-            "school",
-            "director",
-            "additional_director",
-            "choice_1",
-            "choice_2",
-            "choice_3",
-            "concert_final_score",
-            "sight_reading_final_score",
+        if event_name_select:
+            filtered_pml = filtered_pml[filtered_pml["event_name"] == event_name_select]
+
+        min_performance_count = st.slider(
+            "Minimum Performance Count",
+            0,
+            100,
+            0,
+        )
+
+        if min_performance_count:
+            filtered_pml = filtered_pml[
+                filtered_pml["performance_count"] > min_performance_count
+            ]
+
+        # only keep columns
+        display_pml = filtered_pml[
+            [
+                "grade",
+                "title",
+                "composer",
+                "arranger",
+                "code",
+                "performance_count",
+                "average_concert_score",
+                "average_sight_reading_score",
+            ]
         ]
-    ]
 
-    st.write("Filtered Data")
+        st.dataframe(display_pml)
+        st.write(len(display_pml))
 
-    st.write(filter_df)
+        graphed_pml = filtered_pml[
+            # no nan values
+            (filtered_pml["average_concert_score"].notna())
+            & (filtered_pml["average_sight_reading_score"].notna())
+            # no zeros
+            & (filtered_pml["average_concert_score"] != 0)
+            & (filtered_pml["average_sight_reading_score"] != 0)
+        ]
 
-    # write len
-    st.write("Number of rows:", len(filter_df))
+        if graphed_pml[graphed_pml["performance_count"] > min_performance_count].empty:
+            st.write("No data to graph")
+            return
 
-    # st.write(df)
+        else:
 
-    # # write len
-    # st.write("Number of rows:", len(df))
+            max_x = graphed_pml[
+                graphed_pml["performance_count"] > min_performance_count
+            ]["average_concert_score"].max()
+            max_y = graphed_pml[
+                graphed_pml["performance_count"] > min_performance_count
+            ]["average_sight_reading_score"].max()
 
-    st.sidebar.write(
-        "This dashboard was created by [Blaine Cowen](mailto:blaine.cowen@gmail.com)"
-    )
+            bubble_chart_altair = (
+                alt.Chart(
+                    graphed_pml[
+                        graphed_pml["performance_count"] > min_performance_count
+                    ]
+                )
+                .mark_circle()
+                .encode(
+                    x=alt.X(
+                        "average_concert_score",
+                        scale=alt.Scale(type="log", domain=(1, max_x)),
+                    ),
+                    y=alt.Y(
+                        "average_sight_reading_score",
+                        scale=alt.Scale(type="log", domain=(1, max_y)),
+                    ),
+                    color=alt.Color("event_name", legend=None),
+                    size=alt.Size(
+                        "performance_count",
+                        legend=None,
+                        scale=alt.Scale(range=[2, 3000]),
+                    ),
+                    tooltip=[
+                        "title",
+                        "composer",
+                        "event_name",
+                        "average_concert_score",
+                        "average_sight_reading_score",
+                    ],
+                )
+                .interactive()
+            )
+
+            st.altair_chart(
+                bubble_chart_altair,
+                use_container_width=True,
+            )
+
+        if len(graphed_pml) == 1:
+            remaining_row = graphed_pml.iloc[0]
+            remaining_title = remaining_row["title"]
+            remaining_composer = remaining_row["composer"]
+            remaining_year = remaining_row["earliest_year"]
+            st.write(f"Data from {remaining_title} by {remaining_composer}")
+
+            # graph how many times it has been performed compared to all other songs in the event
+            remaining_perf_count = remaining_row["performance_count"]
+            all_perf_count = results_df[
+                results_df["event"].str.contains(event_name_select)
+                & (results_df["year"] >= graphed_pml["earliest_year"].min())
+            ]["song_concat"].value_counts()
+
+            # make a pie chart
+            pie_remaining = px.pie(
+                values=[
+                    remaining_perf_count,
+                    all_perf_count.sum() - remaining_perf_count,
+                ],
+                names=[
+                    f"Selected Song",
+                    f"All Other Songs in Category since {remaining_year}",
+                ],
+                title=f"Remaining Song vs All Other Songs in {event_name_select}",
+            )
+
+            st.plotly_chart(pie_remaining)
+
+            # make a chart that shows the share of the remaining songs vs all songs in the event
 
 
 if __name__ == "__main__":
