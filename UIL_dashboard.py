@@ -19,6 +19,16 @@ def get_db(df):
         "sight_reading_final_score",
     ]
 
+    # make sure year is int
+    df["year"] = df["year"].astype(int)
+
+    # fix event col
+    df["event"] = df["event"].str.replace("tenorbasschorus", "Tenor-Bass Chorus")
+    df["event"] = df["event"].str.replace("mixedchorus", "Mixed Chorus")
+    df["event"] = df["event"].str.replace("stringorchestra", "String Orchestra")
+    df["event"] = df["event"].str.replace("fullorchestra", "Full Orchestra")
+    df["event"] = df["event"].str.replace("treblechorus", "Treble Chorus")
+
     # drop any rows where all scores are na
     df = df.dropna(subset=score_subset, how="all")
 
@@ -118,6 +128,21 @@ def clean_pml(results_df):
     pml = pml[
         pml["event_name"].str.lower().str.contains("band|chorus|orchestra", na=False)
     ]
+
+    # change fullorchestra to Full Orchestra
+    pml["event_name"] = (
+        pml["event_name"]
+        .str.replace("fullorchestra", "Full Orchestra")
+        .str.replace("mixedchorus", "Mixed Chorus")
+        .str.replace("stringorchestra", "String Orchestra")
+        .str.replace("tenorbasschorus", "Tenor-Bass Chorus")
+        .str.replace("treblechorus", "Treble Chorus")
+        .str.title()
+    )
+
+    # drop and steelband rows
+    pml = pml[~pml["event_name"].str.contains("steelband", na=False)]
+
     # remove any rows where grade is not an int
     pml = pml[pml["grade"].isna() == False]
 
@@ -158,6 +183,7 @@ def main():
     with tab1:
         # remove anywhere where concert_1 is not a number
         filter_df = results_df
+
         event_select = st.selectbox(
             "Select an event",
             ["Band", "Chorus", "Orchestra"],
@@ -171,7 +197,7 @@ def main():
                 # create new to select sub events
                 sub_event_select = st.multiselect(
                     "Select a sub event",
-                    filter_df[filter_df["event"].str.contains("Chorus")]["event"]
+                    filter_df[filter_df["event"].str.contains("chorus")]["event"]
                     .sort_values()
                     .unique(),
                     default=[],
@@ -181,13 +207,6 @@ def main():
                     filter_df = filter_df[filter_df["event"].isin(sub_event_select)]
 
             with st.expander("Filter by schools"):
-                # tabs for type select or multiselect
-
-                # school_select = st.multiselect(
-                #     "Select a school",
-                #     filter_df["school"].sort_values().unique(),
-                #     default=[],
-                # )
 
                 school_select = st.text_input("Enter a school name", "")
                 school_select = school_select.lower()
@@ -289,12 +308,9 @@ def main():
                 ]
             ]
 
-            st.write("testing only")
-            st.write(testing_df)
-
             st.write("Filtered Data")
 
-            st.write(filter_df)
+            st.dataframe(filter_df)
 
             # write len
             st.write("Number of rows:", len(filter_df))
@@ -305,21 +321,23 @@ def main():
                 filter_df.groupby("year")["concert_final_score"].mean().sort_index()
             )
             scores_over_time_c2 = (
-                results_df[results_df["event"].str.contains(event_select)]
+                results_df[results_df["gen_event"].str.contains(event_select)]
                 .groupby("year")["concert_final_score"]
                 .mean()
                 .sort_index()
             )
 
-            line_chart_c = py.graph_objs.Figure(
+            import plotly.graph_objs as go
+
+            line_chart_c = go.Figure(
                 data=[
-                    py.graph_objs.Scatter(
+                    go.Scatter(
                         x=list(range(year_select[0], year_select[1] + 1)),
                         y=scores_over_time_c.values,
                         mode="lines",
                         name="Selected Results",
                     ),
-                    py.graph_objs.Scatter(
+                    go.Scatter(
                         x=list(range(year_select[0], year_select[1] + 1)),
                         y=scores_over_time_c2.values,
                         mode="lines",
@@ -336,7 +354,7 @@ def main():
             ].mean()
 
             scores_over_time_sr2 = (
-                results_df[results_df["event"].str.contains(event_select)]
+                results_df[results_df["gen_event"].str.contains(event_select)]
                 .groupby("year")["sight_reading_final_score"]
                 .mean()
                 .sort_index()
@@ -438,8 +456,27 @@ def main():
             0,
         )
 
-        st.write(filtered_pml)
-        st.write(len(filtered_pml))
+        if min_performance_count:
+            filtered_pml = filtered_pml[
+                filtered_pml["performance_count"] > min_performance_count
+            ]
+
+        # only keep columns
+        display_pml = filtered_pml[
+            [
+                "grade",
+                "title",
+                "composer",
+                "arranger",
+                "code",
+                "performance_count",
+                "average_concert_score",
+                "average_sight_reading_score",
+            ]
+        ]
+
+        st.dataframe(display_pml)
+        st.write(len(display_pml))
 
         graphed_pml = filtered_pml[
             # no nan values
@@ -500,6 +537,35 @@ def main():
                 bubble_chart_altair,
                 use_container_width=True,
             )
+
+        if len(graphed_pml) == 1:
+            remaining_row = graphed_pml.iloc[0]
+            remaining_title = remaining_row["title"]
+            remaining_composer = remaining_row["composer"]
+            remaining_year = remaining_row["earliest_year"]
+            st.write(f"Data from {remaining_title} by {remaining_composer}")
+
+            # graph how many times it has been performed compared to all other songs in the event
+            remaining_perf_count = remaining_row["performance_count"]
+            all_perf_count = results_df[
+                results_df["event"].str.contains(event_name_select)
+                & (results_df["year"] >= graphed_pml["earliest_year"].min())
+            ]["song_concat"].value_counts()
+
+            # make a pie chart
+            pie_remaining = px.pie(
+                values=[
+                    remaining_perf_count,
+                    all_perf_count.sum() - remaining_perf_count,
+                ],
+                names=[
+                    f"Selected Song",
+                    f"All Other Songs in Category since {remaining_year}",
+                ],
+                title=f"Remaining Song vs All Other Songs in {event_name_select}",
+            )
+
+            st.plotly_chart(pie_remaining)
 
             # make a chart that shows the share of the remaining songs vs all songs in the event
 
