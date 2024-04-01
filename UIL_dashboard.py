@@ -472,6 +472,7 @@ def main():
                 "performance_count",
                 "average_concert_score",
                 "average_sight_reading_score",
+                "song_score",
             ]
         ]
 
