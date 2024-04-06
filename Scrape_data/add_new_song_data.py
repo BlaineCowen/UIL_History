@@ -149,6 +149,27 @@ def update_db(code, n, entry_number, lock):
         lock.release()
 
 
+def update_unique_entries(
+    title, composer, composer_last, composer_no_hyphen, event, lock
+):
+    try:
+        lock.acquire()
+        conn = sqlite3.connect("uil.db")
+
+        c = conn.cursor()
+
+        c.execute(
+            f'INSERT INTO unique_entries (title, composer, composer_last, composer_no_hyphen, event) VALUES ("{title}", "{composer}", "{composer_last}", "{composer_no_hyphen}", "{event}")'
+        )
+
+        conn.commit()
+    except sqlite3.Error as e:
+        print("Error", e)
+    finally:
+        conn.close()
+        lock.release()
+
+
 def process_row_exact(args):
 
     # Unpack the arguments
@@ -175,7 +196,28 @@ def process_row_exact(args):
             code = None
             continue
 
-        # first see if the entry is already in unique entryies
+        # check if the entry is already in the unique_entries table
+        mask = (
+            (unique_entries["title"] == title)
+            & (
+                (unique_entries["composer"] == composer)
+                | (unique_entries["composer"] == composer_last)
+                | (unique_entries["composer_no_hyphen"] == composer_no_hyphen)
+            )
+            & (unique_entries["event"] == event)
+        )
+
+        if not unique_entries[mask].empty:
+            code = unique_entries[mask]["code"].iloc[0]
+            update_db(code, i, entry_number, lock)
+            continue
+
+        else:
+            # add to unique_entries
+            update_unique_entries(
+                title, composer, composer_last, composer_no_hyphen, event, lock
+            )
+            # first see if the entry is already in unique entryies
         mask = (
             (unique_entries["title"] == title)
             & (

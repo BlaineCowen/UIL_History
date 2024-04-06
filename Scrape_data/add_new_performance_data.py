@@ -5,6 +5,10 @@ from sklearn.preprocessing import MinMaxScaler
 
 def add_performance_count(pml, df):
 
+    # if performance count is in pml, drop it
+    if "performance_count" in pml.columns:
+        pml = pml.drop(columns=["performance_count"])
+
     # make sure df code_n is str
     df["code_1"] = df["code_1"].astype(str)
     df["code_2"] = df["code_2"].astype(str)
@@ -100,11 +104,15 @@ def add_average_score(pml, df):
         ]
 
         df["gen_event"] = ""
-        df.loc[df["event"].str.contains("Band", na=False), "gen_event"] = "Band"
-        df.loc[df["event"].str.contains("Chorus", na=False), "gen_event"] = "Chorus"
-        df.loc[df["event"].str.contains("Orchestra", na=False), "gen_event"] = (
-            "Orchestra"
+        df.loc[df["event"].str.lower().str.contains("band", na=False), "gen_event"] = (
+            "Band"
         )
+        df.loc[
+            df["event"].str.lower().str.contains("chorus", na=False), "gen_event"
+        ] = "Chorus"
+        df.loc[
+            df["event"].str.lower().str.contains("orchestra", na=False), "gen_event"
+        ] = "Orchestra"
 
         # drop any rows where all scores are na
         df = df.dropna(subset=score_subset, how="all")
@@ -136,7 +144,14 @@ def add_average_score(pml, df):
         df["school_search"] = df["school_search"].str.replace(r"[^\w\s]", "")
         df["school_search"] = df["school_search"].str.replace(r" ", "")
 
-        df["event"] = df["event"].str.split("-").str.get(1)
+        df.loc[:, "event"] = (
+            df.loc[:, "event"]
+            .str.lower()
+            .str.split("-")
+            .str.get(1)
+            .str.strip()
+            .str.lower()
+        )
 
         # # director search
         # df["director_search"] = df["director"].str.lower()

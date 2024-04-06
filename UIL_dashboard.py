@@ -69,7 +69,7 @@ def clean_data():
     df = get_db(df)
 
     # fix date
-    df["contest_date"] = pd.to_datetime(df["contest_date"], errors="coerce")
+    df["contest_date"] = pd.to_datetime(df["contest_date"], format="%Y-%m-%d %H:%M:%S")
 
     # change contest_date to just the year
     df["year"] = df["contest_date"].dt.year.astype(str)
