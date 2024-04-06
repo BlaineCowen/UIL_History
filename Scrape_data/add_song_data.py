@@ -517,7 +517,7 @@ def main():
     # sort so 145676 is first entry
     uil_data = uil_data.sort_values("entry_number", ascending=False)
 
-    pml = add_song_concat(pd.read_csv("Scrape_data/pml.csv", encoding="utf-8"))
+    pml = add_song_concat(pd.read_csv("scrape_data/pml.csv", encoding="utf-8"))
 
     # create pml table
 

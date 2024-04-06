@@ -1,5 +1,5 @@
-/Scrape_data/ignore
-/Scrape_data/csv_downloads
+/scrape_data/ignore
+/scrape_data/csv_downloads
 *.csv
 uil_backup.db
 launch.json

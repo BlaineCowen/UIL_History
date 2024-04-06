@@ -62,7 +62,7 @@ def loop_csv():
     # read all_results.csv
 
     df1 = pd.read_csv("all_results.csv", encoding="iso-8859-1", low_memory=False)
-    path = "Scrape_data/csv_downloads"
+    path = "scrape_data/csv_downloads"
 
     files = os.listdir(path)
     for file in files:
@@ -117,10 +117,10 @@ def get_uil_results():
 
     # create log of urls if not exists
     try:
-        with open("Scrape_data/urls.txt", "r") as f:
+        with open("scrape_data/urls.txt", "r") as f:
             urls = f.read().splitlines()
     except:
-        with open("Scrape_data/urls.txt", "w") as f:
+        with open("scrape_data/urls.txt", "w") as f:
             f.write("")
         urls = []
     for i in range(7000, 10000):
@@ -137,7 +137,7 @@ def get_uil_results():
         try:
             driver.find_element(By.XPATH, '//*[@id="export-csv"]').click()
             print(f"contest found at {i}")
-            with open("Scrape_data/urls.txt", "a") as f:
+            with open("scrape_data/urls.txt", "a") as f:
                 f.write(url + "\n")
 
         except:

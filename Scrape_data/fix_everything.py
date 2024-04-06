@@ -8,7 +8,7 @@ def fix_everything():
     # # drop duplicate entry numbers in uil.db
     conn = sqlite3.connect("uil.db")
     # pml = pd.read_sql_query("SELECT * FROM pml", conn)
-    pml = pd.read_csv("Scrape_data/pml.csv")
+    pml = pd.read_csv("scrape_data/pml.csv")
 
     # replacce all column names with underscores and lower
     pml.columns = pml.columns.str.lower().str.replace(" ", "_")
