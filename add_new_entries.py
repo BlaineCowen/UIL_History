@@ -115,6 +115,17 @@ def loop_csv():
     # update uil.db to this new df_concat
     conn = sqlite3.connect("uil.db")
     results_df.to_sql("results", conn, if_exists="replace", index=False)
+    # delete duplicate rows using entry_number as unique key
+    conn.execute(
+        """
+        DELETE FROM results
+        WHERE rowid NOT IN (
+            SELECT MIN(rowid)
+            FROM results
+            GROUP BY entry_number
+        )
+        """
+    )
     conn.close()
 
 

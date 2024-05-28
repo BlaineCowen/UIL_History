@@ -92,9 +92,6 @@ def fuzzy_search(title, composer, composer_last, composer_no_hyphen, event_name,
     if "band" in event_name:
         event_name = "band"
 
-    if "nachtigall" in title:
-        print(title)
-
     mask = (pml["event_name"].str.contains(event_name, regex=False)) & (
         (pml["composer_search"].str.contains(composer, regex=False))
         | (pml["composer_search"].str.contains(composer_last, regex=False))

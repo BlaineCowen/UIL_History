@@ -124,34 +124,31 @@ def add_average_score(pml, df):
         cols_not_in_subset = df.columns.difference(score_subset)
         df[cols_not_in_subset] = df[cols_not_in_subset].fillna("")
 
-        df["song_concat"] = df["title_1"] + " " + df["title_2"] + " " + df["title_3"]
-        df["composer_concat"] = (
+        df.loc[:, "song_concat"] = (
+            df["title_1"] + " " + df["title_2"] + " " + df["title_3"]
+        )
+        df.loc[:, "composer_concat"] = (
             df["composer_1"] + " " + df["composer_2"] + " " + df["composer_3"]
         )
         # remove any non-alphanumeric characters and spaces
-        df["song_concat"] = df["song_concat"].str.replace(r"[^\w\s]", "")
-        df["song_concat"] = df["song_concat"].str.replace(" ", "")
+        df.loc[:, "song_concat"] = df["song_concat"].str.replace(r"[^\w\s]", "")
+        df.loc[:, "song_concat"] = df["song_concat"].str.replace(" ", "")
 
-        df["composer_concat"] = df["composer_concat"].str.replace(r"[^\w\s]", "")
-        df["composer_concat"] = df["composer_concat"].str.replace(r" ", "")
+        df.loc[:, "composer_concat"] = df["composer_concat"].str.replace(r"[^\w\s]", "")
+        df.loc[:, "composer_concat"] = df["composer_concat"].str.replace(r" ", "")
 
         # make all characters lowercase
-        df["song_concat"] = df["song_concat"].str.lower()
-        df["composer_concat"] = df["composer_concat"].str.lower()
-
+        df.loc[:, "song_concat"] = df["song_concat"].str.lower()
+        df.loc[:, "composer_concat"] = df["composer_concat"].str.lower()
         # fix school names
-        df["school_search"] = df["school"].str.strip().str.lower()
-        df["school_search"] = df["school_search"].str.replace(r"[^\w\s]", "")
-        df["school_search"] = df["school_search"].str.replace(r" ", "")
+        df.loc[:, "school_search"] = df["school"].str.strip().str.lower()
+        df.loc[:, "school_search"] = df["school_search"].str.replace(r"[^\w\s]", "")
+        df.loc[:, "school_search"] = df["school_search"].str.replace(r" ", "")
 
-        df.loc[:, "event"] = (
-            df.loc[:, "event"]
-            .str.lower()
-            .str.split("-")
-            .str.get(1)
-            .str.strip()
-            .str.lower()
-        )
+        # fix event names
+        # drop events wher not str
+        df = df.dropna(subset=["event"])
+        df["event"] = df["event"].astype(str)
 
         # # director search
         # df["director_search"] = df["director"].str.lower()
@@ -159,10 +156,9 @@ def add_average_score(pml, df):
 
         # drop any rows where contest_date is na
         df = df.dropna(subset=["contest_date"])
-
-        df["contest_date"] = pd.to_datetime(
-            df["contest_date"], format="%Y-%m-%d %H:%M:%S"
-        )
+        # only keep first 10 of date
+        df["contest_date"] = df["contest_date"].str[:10]
+        df["contest_date"] = pd.to_datetime(df["contest_date"], format="%Y-%m-%d")
         test_df = df[df["contest_date"].isna()]
 
         # Extract the year and store it in a new column

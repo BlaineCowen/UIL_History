@@ -19,16 +19,29 @@ def get_db(df):
         "sight_reading_final_score",
     ]
 
-    # make sure year is int
+    df["contest_date"] = df["contest_date"].str.split(" ").str[0]
+    df["contest_date"] = pd.to_datetime(
+        df["contest_date"], format="%Y-%m-%d", errors="coerce"
+    )
+
+    # print head
+    print(df.head())
+
+    df["year"] = df["contest_date"].dt.year
+    df = df.dropna(subset=["year"])
     df["year"] = df["year"].astype(int)
 
+    # create event_search
+    df["event_search"] = df["event"]
     # fix event col
-    df["event"] = df["event"].str.replace("tenorbasschorus", "Tenor-Bass Chorus")
-    df["event"] = df["event"].str.replace("mixedchorus", "Mixed Chorus")
-    df["event"] = df["event"].str.replace("stringorchestra", "String Orchestra")
-    df["event"] = df["event"].str.replace("fullorchestra", "Full Orchestra")
-    df["event"] = df["event"].str.replace("treblechorus", "Treble Chorus")
-
+    # create event_search
+    df["event_search"] = df["event"]
+    # fix event col
+    df["event"] = df["event"].str.replace("tenor/bass chorus", "Tenor-Bass Chorus")
+    df["event"] = df["event"].str.replace("mixed chorus", "Mixed Chorus")
+    df["event"] = df["event"].str.replace("string orchestra", "String Orchestra")
+    df["event"] = df["event"].str.replace("full orchestra", "Full Orchestra")
+    df["event"] = df["event"].str.replace("treble chorus", "Treble Chorus")
     # drop any rows where all scores are na
     df = df.dropna(subset=score_subset, how="all")
 
@@ -68,11 +81,8 @@ def clean_data():
     # remove anywhere where concert score 1 is not a number
     df = get_db(df)
 
-    # fix date
-    df["contest_date"] = pd.to_datetime(df["contest_date"], format="%Y-%m-%d %H:%M:%S")
-
-    # change contest_date to just the year
-    df["year"] = df["contest_date"].dt.year.astype(str)
+    # fill na with 0
+    df = df.fillna(0)
 
     df = df[df["concert_score_1"] != 0]
     df = df[df["concert_score_2"] != 0]
@@ -197,7 +207,7 @@ def main():
                 # create new to select sub events
                 sub_event_select = st.multiselect(
                     "Select a sub event",
-                    filter_df[filter_df["event"].str.contains("Chorus")]["event"]
+                    filter_df[filter_df["event_search"].str.contains("chorus")]["event"]
                     .sort_values()
                     .unique(),
                     default=[],
@@ -274,7 +284,7 @@ def main():
 
             if year_select:
                 filter_df = filter_df[
-                    filter_df["year"].between(str(year_select[0]), str(year_select[1]))
+                    filter_df["year"].between(int(year_select[0]), int(year_select[1]))
                 ]
 
             if song_name_input or composer_name_input:
@@ -289,6 +299,8 @@ def main():
                     )
                 ]
 
+            # format year
+            filter_df["year"] = filter_df["year"].astype(str)
             filter_df = filter_df[
                 [
                     "year",
@@ -305,11 +317,15 @@ def main():
                 ]
             ]
 
+            # shown_df = filter df with proper case and no underscores
+            shown_df = filter_df.copy()
+            shown_df.columns = shown_df.columns.str.replace("_", " ").str.title()
+
             st.write("Filtered Data")
 
             # hide index
 
-            st.dataframe(filter_df, hide_index=True)
+            st.dataframe(shown_df, hide_index=True)
 
             # write len
             st.write("Number of rows:", len(filter_df))
