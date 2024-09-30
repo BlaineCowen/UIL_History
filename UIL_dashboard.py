@@ -5,7 +5,17 @@ import streamlit as st
 import plotly as py
 import altair as alt
 import plotly.express as px
+import libsql_experimental as libsql
+from libsql_client import Client
 
+
+
+
+# @st.cache_resource
+def init_connection():
+    # Create a SQLite connection
+    conn = sqlite3.connect("uil.db")
+    return conn
 
 def get_db(df):
     score_subset = [
@@ -19,7 +29,16 @@ def get_db(df):
         "sight_reading_final_score",
     ]
 
-    df["contest_date"] = df["contest_date"].str.split(" ").str[0]
+    def fix_date(date):
+        try:
+            new_date = date.split(" ")[0]
+        except Exception as e:
+            # Log the error or handle it as needed
+            print(f"Error processing date: {date}, Error: {e}")
+            new_date = date  # Return the original date if an error occurs
+        return new_date
+
+    df["contest_date"] = df["contest_date"].apply(fix_date)
     df["contest_date"] = pd.to_datetime(
         df["contest_date"], format="%Y-%m-%d", errors="coerce"
     )
@@ -75,10 +94,16 @@ def get_db(df):
     return df
 
 
-@st.cache_data
+# @st.cache_data(ttl=600)
 def clean_data():
-    df = pd.read_sql("SELECT * FROM results", sqlite3.connect("uil.db"))
-    # remove anywhere where concert score 1 is not a number
+
+    conn = init_connection()
+
+
+
+    df = pd.read_sql_query("SELECT * FROM results", conn)
+
+    # Process the DataFrame with get_db function
     df = get_db(df)
 
     # fill na with 0
@@ -131,7 +156,11 @@ def clean_data():
 
 
 def clean_pml(results_df):
-    pml = pd.read_sql("SELECT * FROM pml", sqlite3.connect("uil.db"))
+
+    conn = sqlite3.connect("uil.db")
+    pml = pd.read_sql_query("SELECT * FROM pml", conn)
+
+
     pml[["arranger", "composer"]] = pml[["arranger", "composer"]].fillna("")
 
     # only keep rows where event contains band, chorus, or orchestra

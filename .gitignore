@@ -3,3 +3,4 @@
 *.csv
 uil_backup.db
 launch.json
+secrets.toml

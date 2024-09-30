@@ -16,6 +16,7 @@ def add_performance_count(pml, df):
     # only df where concert score is not 0
     df = df[df["concert_final_score"] != 0]
 
+    # get the count of each code
     code_counts = (
         df.groupby("code_1")
         .size()

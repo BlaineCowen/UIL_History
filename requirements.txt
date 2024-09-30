@@ -25,6 +25,7 @@ plotly==5.20.0
 protobuf==4.25.3
 pyarrow==15.0.2
 pydeck==0.8.1b0
+pymongo==4.8.0
 Pygments==2.17.2
 python-dateutil==2.9.0.post0
 python-Levenshtein==0.25.0

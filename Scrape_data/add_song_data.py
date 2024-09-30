@@ -117,8 +117,6 @@ def add_song_concat(pml):
     # replace nan with empty string
     pml = pml.replace(np.nan, "", regex=True)
 
-    pml.to_sql("pml", sqlite3.connect("uil.db"), if_exists="replace")
-
     return pml
 
 
@@ -268,9 +266,6 @@ def group_titles(df):
     grouped_df["event"] = grouped_df["event"].str.replace(" ", "")
     grouped_df["event"] = grouped_df["event"].str.replace(r"[^a-zA-Z]", "", regex=True)
 
-    print(f"shape before: {df.shape}")
-    print(f"shape after: {grouped_df.shape}")
-
     # give each one a unique id
     grouped_df["entry_id"] = range(1, len(grouped_df) + 1)
 
@@ -359,9 +354,6 @@ def fuzzy_search(title, composer, composer_last, composer_no_hyphen, event_name,
     if "band" in event_name:
         event_name = "band"
 
-    if "nachtigall" in title:
-        print(title)
-
     mask = (pml["event_name"].str.contains(event_name, regex=False)) & (
         (pml["composer_search"].str.contains(composer, regex=False))
         | (pml["composer_search"].str.contains(composer_last, regex=False))
@@ -421,9 +413,18 @@ def process_row_exact(args):
     if not event_name:
         return None
 
-    code = fuzzy_search(
-        title, composer, composer_last, composer_no_hyphen, event_name, pml
+    check_unique = pd.read_sql(
+        f'SELECT * FROM unique_entries WHERE entry_id = {row[col.index("entry_id")]}',
+        sqlite3.connect("uil.db"),
     )
+
+    if check_unique["code"].iloc[0] == "" or check_unique["code"].iloc[0] is None:
+        code = fuzzy_search(
+            title, composer, composer_last, composer_no_hyphen, event_name, pml
+        )
+
+    else:
+        code = check_unique["code"].iloc[0]
 
     if code is None:
         return None
@@ -469,6 +470,14 @@ def main():
     # Create a lock
     lock = manager.Lock()
 
+    # create new pml from csv
+    pml = pd.read_csv("scrape_data/pml.csv", encoding="utf-8")
+
+    # replace pml table in db
+    conn = sqlite3.connect("uil.db")
+    pml.to_sql("pml", conn, if_exists="replace", index=False)
+    conn.close()
+
     # connect to db
     conn = sqlite3.connect("uil.db")
 
@@ -512,9 +521,6 @@ def main():
     uil_data.to_sql("results", conn, if_exists="replace", index=False)
     conn.close()
 
-    columns = uil_data.columns.to_list()
-
-    # sort so 145676 is first entry
     uil_data = uil_data.sort_values("entry_number", ascending=False)
 
     pml = add_song_concat(pd.read_csv("scrape_data/pml.csv", encoding="utf-8"))
