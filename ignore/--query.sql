@@ -1,0 +1,11 @@
+select * from pml
+    WHERE event_name LIKE '0%' 
+       OR event_name LIKE '1%' 
+       OR event_name LIKE '2%' 
+       OR event_name LIKE '3%' 
+       OR event_name LIKE '4%' 
+       OR event_name LIKE '5%' 
+       OR event_name LIKE '6%' 
+       OR event_name LIKE '7%' 
+       OR event_name LIKE '8%' 
+       OR event_name LIKE '9%';

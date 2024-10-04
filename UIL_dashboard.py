@@ -9,13 +9,16 @@ import libsql_experimental as libsql
 from libsql_client import Client
 
 
-
-
-# @st.cache_resource
-def init_connection():
+@st.cache_resource
+def collect_dbs():
     # Create a SQLite connection
     conn = sqlite3.connect("uil.db")
-    return conn
+    results_df = pd.read_sql_query("SELECT * FROM results", conn)
+    pml_df = pd.read_sql_query("SELECT * FROM pml", conn)
+    conn.close()
+
+    return results_df, pml_df
+
 
 def get_db(df):
     score_subset = [
@@ -42,9 +45,6 @@ def get_db(df):
     df["contest_date"] = pd.to_datetime(
         df["contest_date"], format="%Y-%m-%d", errors="coerce"
     )
-
-    # print head
-    print(df.head())
 
     df["year"] = df["contest_date"].dt.year
     df = df.dropna(subset=["year"])
@@ -94,72 +94,81 @@ def get_db(df):
     return df
 
 
-# @st.cache_data(ttl=600)
+@st.cache_data(ttl=600)
 def clean_data():
 
-    conn = init_connection()
+    results_df, pml_df = collect_dbs()
 
+    results_df = get_db(results_df)
 
-
-    df = pd.read_sql_query("SELECT * FROM results", conn)
-
-    # Process the DataFrame with get_db function
-    df = get_db(df)
+    pml_df = clean_pml(pml_df)
 
     # fill na with 0
-    df = df.fillna(0)
+    results_df = results_df.fillna(0)
 
-    df = df[df["concert_score_1"] != 0]
-    df = df[df["concert_score_2"] != 0]
-    df = df[df["concert_score_3"] != 0]
-    df = df[df["concert_final_score"] != 0]
-    df = df[df["sight_reading_score_1"] != 0]
-    df = df[df["sight_reading_score_2"] != 0]
-    df = df[df["sight_reading_score_3"] != 0]
-    df = df[df["sight_reading_final_score"] != 0]
+    results_df = results_df[results_df["concert_score_1"] != 0]
+    results_df = results_df[results_df["concert_score_2"] != 0]
+    results_df = results_df[results_df["concert_score_3"] != 0]
+    results_df = results_df[results_df["concert_final_score"] != 0]
+    results_df = results_df[results_df["sight_reading_score_1"] != 0]
+    results_df = results_df[results_df["sight_reading_score_2"] != 0]
+    results_df = results_df[results_df["sight_reading_score_3"] != 0]
+    results_df = results_df[results_df["sight_reading_final_score"] != 0]
 
     # change all concert scores to int
-    df["concert_score_1"] = df["concert_score_1"].astype(float).astype(int)
-    df["concert_score_2"] = df["concert_score_2"].astype(float).astype(int)
-    df["concert_score_3"] = df["concert_score_3"].astype(float).astype(int)
-    df["concert_final_score"] = df["concert_final_score"].astype(float).astype(int)
-    df["sight_reading_score_1"] = df["sight_reading_score_1"].astype(float).astype(int)
-    df["sight_reading_score_2"] = df["sight_reading_score_2"].astype(float).astype(int)
-    df["sight_reading_score_3"] = df["sight_reading_score_3"].astype(float).astype(int)
-    df["sight_reading_final_score"] = (
-        df["sight_reading_final_score"].astype(float).astype(int)
+    results_df["concert_score_1"] = (
+        results_df["concert_score_1"].astype(float).astype(int)
+    )
+    results_df["concert_score_2"] = (
+        results_df["concert_score_2"].astype(float).astype(int)
+    )
+    results_df["concert_score_3"] = (
+        results_df["concert_score_3"].astype(float).astype(int)
+    )
+    results_df["concert_final_score"] = (
+        results_df["concert_final_score"].astype(float).astype(int)
+    )
+    results_df["sight_reading_score_1"] = (
+        results_df["sight_reading_score_1"].astype(float).astype(int)
+    )
+    results_df["sight_reading_score_2"] = (
+        results_df["sight_reading_score_2"].astype(float).astype(int)
+    )
+    results_df["sight_reading_score_3"] = (
+        results_df["sight_reading_score_3"].astype(float).astype(int)
+    )
+    results_df["sight_reading_final_score"] = (
+        results_df["sight_reading_final_score"].astype(float).astype(int)
     )
 
     # add columns called Choice 1, Choice 2, and Choice 3 where title and composer are combined
-    df["choice_1"] = df["title_1"] + "–" + df["composer_1"]
-    df["choice_2"] = df["title_2"] + "–" + df["composer_2"]
-    df["choice_3"] = df["title_3"] + "–" + df["composer_3"]
+    results_df["choice_1"] = results_df["title_1"] + "–" + results_df["composer_1"]
+    results_df["choice_2"] = results_df["title_2"] + "–" + results_df["composer_2"]
+    results_df["choice_3"] = results_df["title_3"] + "–" + results_df["composer_3"]
 
-    df["school_level"] = ""
-    df.loc[df["conference"].str.contains("A", na=False), "school_level"] = "High School"
-    df.loc[df["conference"].str.contains("C", na=False), "school_level"] = (
-        "Middle School/JH"
-    )
+    results_df["school_level"] = ""
+    results_df.loc[
+        results_df["conference"].str.contains("A", na=False), "school_level"
+    ] = "High School"
+    results_df.loc[
+        results_df["conference"].str.contains("C", na=False), "school_level"
+    ] = "Middle School/JH"
 
     # change classification to title case
-    df["classification"] = df["classification"].str.replace("-", " ")
-    df["classification"] = df["classification"].str.title()
-    df.loc[df["classification"].str.contains("Nv", na=False), "classification"] = (
-        "Non Varsity"
-    )
+    results_df["classification"] = results_df["classification"].str.replace("-", " ")
+    results_df["classification"] = results_df["classification"].str.title()
+    results_df.loc[
+        results_df["classification"].str.contains("Nv", na=False), "classification"
+    ] = "Non Varsity"
     # if classification begins with "V" it is Varsit
-    df.loc[df["classification"].str.contains(r"^V", na=False), "classification"] = (
-        "Varsity"
-    )
+    results_df.loc[
+        results_df["classification"].str.contains(r"^V", na=False), "classification"
+    ] = "Varsity"
 
-    return df
+    return results_df, pml_df
 
 
-def clean_pml(results_df):
-
-    conn = sqlite3.connect("uil.db")
-    pml = pd.read_sql_query("SELECT * FROM pml", conn)
-
+def clean_pml(pml):
 
     pml[["arranger", "composer"]] = pml[["arranger", "composer"]].fillna("")
 
@@ -215,7 +224,7 @@ def main():
         "Welcome to the UIL Dashboard. This dashboard is designed to help track UIL Concert and SR results from the state of Texas."
     )
     st.write("Please select an event to begin.")
-    results_df = clean_data()
+    results_df, pml_df = clean_data()
 
     tab1, tab2 = st.tabs(["C&SR Results", "PML"])
 
@@ -453,13 +462,9 @@ def main():
         # # write len
         # st.write("Number of rows:", len(df))
 
-        st.write(
-            "This dashboard was created by [Blaine Cowen](mailto:blaine.cowen@gmail.com)"
-        )
-
     with tab2:
         st.write("PML")
-        unfiltered_pml = clean_pml(results_df)
+        unfiltered_pml = pml_df
         filtered_pml = unfiltered_pml
 
         grade_select = st.slider(
@@ -520,7 +525,20 @@ def main():
             ]
         ]
 
-        st.dataframe(display_pml, hide_index=True)
+        # Create a copy of the column names with replacements
+        display_columns = [col.replace("_", " ").title() for col in display_pml.columns]
+
+        # Display the dataframe with modified column names
+        st.dataframe(
+            display_pml.rename(columns=dict(zip(display_pml.columns, display_columns))),
+            column_config={
+                "Song Score": st.column_config.NumberColumn(
+                    help="Rating based on average scores compared by year and performance count",
+                    format="%.2f",
+                )
+            },
+            hide_index=True,
+        )
 
         graphed_pml = filtered_pml[
             # no nan values
@@ -591,6 +609,10 @@ def main():
 
             # graph how many times it has been performed compared to all other songs in the event
             remaining_perf_count = remaining_row["performance_count"]
+
+            if not event_name_select:
+                event_name_select = remaining_row["event_name"]
+
             all_perf_count = results_df[
                 results_df["event"].str.contains(event_name_select)
                 & (results_df["year"] >= graphed_pml["earliest_year"].min())
@@ -604,14 +626,20 @@ def main():
                 ],
                 names=[
                     f"Selected Song",
-                    f"All Other Songs in Category since {remaining_year}",
+                    f"All Other Songs in category since {int(remaining_year)}",
                 ],
                 title=f"Remaining Song vs All Other Songs in {event_name_select}",
             )
 
             st.plotly_chart(pie_remaining)
 
-            # make a chart that shows the share of the remaining songs vs all songs in the event
+    st.write(
+        "This dashboard was created by [Blaine Cowen](mailto:blaine.cowen@gmail.com)"
+    )
+    # create buy me coffee image with link
+    st.html(
+        '<a href="https://www.buymeacoffee.com/blainecowen" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 45px !important;width: 170px !important;" ></a>'
+    )
 
 
 if __name__ == "__main__":

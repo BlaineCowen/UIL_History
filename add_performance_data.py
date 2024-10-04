@@ -13,6 +13,9 @@ def add_performance_count(pml, df):
     # make sure pml code is str
     pml["code"] = pml["code"].astype(str).str.strip()
 
+    # get rid of last 2 characters if they are .0
+    pml["code"] = pml["code"].str.replace(".0", "")
+
     # only df where concert score is not 0
     df = df[df["concert_final_score"] != 0]
 
@@ -39,8 +42,6 @@ def add_performance_count(pml, df):
 
     # change code to string
     code_counts["code"] = code_counts["code"].astype(str)
-
-    # rem
 
     # merge code_counts with pml but keep code_counts performance_count
     pml = pml.merge(code_counts, on="code", how="left")
@@ -304,18 +305,14 @@ def add_average_score(pml, df):
 
 def main():
 
-    conn = sqlite3.connect("uil.db")
+    conn = sqlite3.connect("combined.db")
 
-    pml = pd.read_sql_query("SELECT * FROM pml", conn)
+    pml = pd.read_csv("Scrape_data/pml.csv")
     # pml = pd.read_csv("Scrape_data/pml.csv")
     df = pd.read_sql_query("SELECT * FROM results", conn)
 
-    conn.close()
-
     pml = add_performance_count(pml, df)
     pml, df = add_average_score(pml, df)
-
-    conn = sqlite3.connect("uil.db")
 
     pml.to_sql("pml", conn, if_exists="replace", index=False)
     df.to_sql("results", conn, if_exists="replace", index=False)
