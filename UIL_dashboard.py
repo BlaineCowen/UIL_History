@@ -174,12 +174,14 @@ def clean_pml(pml):
 
     # only keep rows where event contains band, chorus, or orchestra
     pml = pml[
-        pml["event_name"].str.lower().str.contains("band|chorus|orchestra", na=False)
+        pml["event_name"]
+        .str.lower()
+        .str.contains("band|chorus|orchestra|madrigal", na=False)
     ]
 
     # change fullorchestra to Full Orchestra
-    pml["event_name"] = (
-        pml["event_name"]
+    pml.loc[:, "event_name"] = (
+        pml.loc[:, "event_name"]
         .str.replace("fullorchestra", "Full Orchestra")
         .str.replace("mixedchorus", "Mixed Chorus")
         .str.replace("stringorchestra", "String Orchestra")
@@ -221,7 +223,7 @@ def clean_pml(pml):
 def main():
     st.title("UIL Dashboard")
     st.write(
-        "Welcome to the UIL Dashboard. This dashboard is designed to help track UIL Concert and SR results from the state of Texas."
+        "Welcome to the UIL Dashboard. This dashboard is designed to help track UIL Concert and Sight Reading results from the state of Texas."
     )
     st.write("Please select an event to begin.")
     results_df, pml_df = clean_data()

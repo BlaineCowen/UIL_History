@@ -6,13 +6,52 @@ import sqlite3
 from multiprocessing import Pool
 import re
 from fuzzywuzzy import process
-from fix_everything import fix_everything
+from fix_pml import fix_pml
 from tqdm import tqdm
 from add_new_performance_data import main as add_new_performance_data
 from multiprocessing import Manager
 
 
-def fix_pml(pml):
+def adjust_pml(pml):
+
+    # add a composer_search column to pml
+    pml["composer_search"] = (
+        pml["composer"]
+        .str.replace(" ", "")
+        .str.lower()
+        .str.strip()
+        .str.replace(r"[^a-zA-Z]", "", regex=True)
+    )
+
+    # add composer_last column to pml
+    pml["composer_last"] = (
+        pml["composer"]
+        .str.split(" ")
+        .str[-1]
+        .str.replace(r"[^a-zA-Z]", "", regex=True)
+        .str.lower()
+    )
+
+    # add composer_no_hyphen column to pml
+    pml["composer_no_hyphen"] = (
+        pml["composer"]
+        .str.lower()
+        .str.replace("-", "")
+        .str.replace(r"[^a-zA-Z]", "", regex=True)
+    )
+
+    # Fill NaN values in the 'composer' column with an empty string before creating the mask
+    mask = pml["composer"].fillna("").str.contains("/", regex=False)
+
+    pml.loc[mask, "arranger"] = (
+        pml.loc[mask, "composer"]
+        .fillna("")
+        .str.split("/", expand=True)
+        .iloc[:, -1]
+        .str.split(" ", expand=True)
+        .iloc[:, -1]
+    )
+
     # all lower
     pml["title"] = pml["title"].str.lower()
     pml["composer"] = pml["composer"].str.lower()
@@ -50,8 +89,7 @@ def add_concat_to_results(df):
     for i in range(1, 4):
         # make song simple lower
         df[f"title_simple_{i}"] = df[f"title_{i}"].str.lower()
-        # add column potential match if there are 5 digits inside parenthesis
-        df[f"potential_match_{i}"] = ""
+
         # remove anything in parenthesis
         df[f"title_simple_{i}"] = df[f"title_simple_{i}"].str.replace(
             r"\(.*?\)", "", regex=True
@@ -194,7 +232,7 @@ def fuzzy_search(
 def update_db(code, n, entry_number, lock):
     try:
         lock.acquire()
-        conn = sqlite3.connect("combined.db")
+        conn = sqlite3.connect("uil.db")
         c = conn.cursor()
 
         c.execute(
@@ -210,16 +248,18 @@ def update_db(code, n, entry_number, lock):
 
 
 def update_unique_entries(
-    title, composer, composer_last, composer_no_hyphen, arranger, event, lock
+    code, title, composer, composer_last, composer_no_hyphen, arranger, event, lock
 ):
+    if code is None:
+        code = "none"
     try:
         lock.acquire()
-        conn = sqlite3.connect("combined.db")
+        conn = sqlite3.connect("uil.db")
 
         c = conn.cursor()
 
         c.execute(
-            f'INSERT INTO unique_entries (title, composer, composer_last, composer_no_hyphen, arranger, event) VALUES ("{title}", "{composer}", "{composer_last}", "{composer_no_hyphen}", "{arranger}","{event}")'
+            f'INSERT INTO unique_entries (code, title, composer, composer_last, composer_no_hyphen, arranger, event) VALUES ("{code}","{title}", "{composer}", "{composer_last}", "{composer_no_hyphen}", "{arranger}","{event}")'
         )
 
         conn.commit()
@@ -233,9 +273,10 @@ def update_unique_entries(
 def process_row_exact(args):
 
     # Unpack the arguments
-    col, row, pml, unique_entries, lock = args
+    col, row, pml, lock = args
 
     for i in range(1, 4):
+        code = None
         title = row[col.index(f"title_simple_{i}")]
         composer_first = row[col.index(f"composer_first_{i}")]
         composer_match = row[col.index(f"composer_match_{i}")]
@@ -263,49 +304,30 @@ def process_row_exact(args):
             code = None
             continue
 
-        # check if the entry is already in the unique_entries table
-        mask = (
-            (unique_entries["title"] == title)
-            & (
-                (unique_entries["composer"] == composer_first)
-                | (unique_entries["composer"] == composer_match)
-                | (unique_entries["composer_no_hyphen"] == composer_no_hyphen)
+        try:
+            lock.acquire()
+            conn = sqlite3.connect("uil.db")
+            unique_entries = pd.read_sql("SELECT * FROM unique_entries", conn)
+            lock.release()
+
+            # check if the entry is already in the unique_entries table
+            mask = (
+                (unique_entries["title"] == title)
+                & (
+                    (unique_entries["composer"] == composer_first)
+                    | (unique_entries["composer"] == composer_match)
+                    | (unique_entries["composer_no_hyphen"] == composer_no_hyphen)
+                )
+                & (unique_entries["event"] == event)
             )
-            & (unique_entries["event"] == event)
-        )
 
-        if not unique_entries[mask].empty:
-            code = unique_entries[mask]["code"].iloc[0]
-            update_db(code, i, entry_number, lock)
-            continue
+            if not unique_entries[mask].empty:
+                code = unique_entries[mask]["code"].iloc[0]
+                update_db(code, i, entry_number, lock)
+                continue
 
-        else:
-            # add to unique_entries
-            update_unique_entries(
-                title,
-                composer_first,
-                composer_match,
-                composer_no_hyphen,
-                arranger,
-                event,
-                lock,
-            )
-            # first see if the entry is already in unique entryies
-        mask = (
-            (unique_entries["title"] == title)
-            & (
-                (unique_entries["composer"] == composer_first)
-                | (unique_entries["composer"] == composer_match)
-                | (unique_entries["composer_no_hyphen"] == composer_no_hyphen)
-            )
-            & (unique_entries["event"] == event)
-        )
-
-        if not unique_entries[mask].empty:
-            code = unique_entries[mask]["code"].iloc[0]
-
-            update_db(code, i, entry_number, lock)
-            continue
+        except sqlite3.Error as e:
+            print("Error", e)
 
         code = fuzzy_search(
             title,
@@ -317,11 +339,24 @@ def process_row_exact(args):
             pml,
         )
 
+        # add to unique_entries
+        update_unique_entries(
+            code,
+            title,
+            composer_first,
+            composer_match,
+            composer_no_hyphen,
+            arranger,
+            event,
+            lock,
+        )
+
         if code is None:
             continue
 
         # update the results_with_codes table using the entry_number
         update_db(code, i, entry_number, lock)
+
     return
 
 
@@ -334,7 +369,7 @@ def main():
     lock = manager.Lock()
 
     # connect to db
-    conn = sqlite3.connect("combined.db")
+    conn = sqlite3.connect("uil.db")
 
     uil_data = pd.read_sql("SELECT * FROM results", conn)
 
@@ -361,7 +396,11 @@ def main():
     uil_data["code_3"] = uil_data["code_3"].fillna("")
 
     # get missing length before
-    missing_length_before = len(uil_data)
+    missing_length_before = (
+        len(uil_data[uil_data["code_1"].str.lower() == "none"])
+        + len(uil_data[uil_data["code_2"].str.lower() == "none"])
+        + len(uil_data[uil_data["code_3"].str.lower() == "none"])
+    )
 
     # close connection
     conn.close()
@@ -373,57 +412,25 @@ def main():
     # sort so 145676 is first entry
     uil_data = uil_data.sort_values("entry_number", ascending=False)
 
-    conn = sqlite3.connect("combined.db")
+    conn = sqlite3.connect("uil.db")
 
-    pml = pd.read_sql("SELECT * FROM pml", conn)
-
-    # add a composer_search column to pml
-    pml["composer_search"] = (
-        pml["composer"]
-        .str.replace(" ", "")
-        .str.lower()
-        .str.strip()
-        .str.replace(r"[^a-zA-Z]", "", regex=True)
-    )
-
-    # add composer_last column to pml
-    pml["composer_last"] = (
-        pml["composer"]
-        .str.split(" ")
-        .str[-1]
-        .str.replace(r"[^a-zA-Z]", "", regex=True)
-        .str.lower()
-    )
-
-    # add composer_no_hyphen column to pml
-    pml["composer_no_hyphen"] = (
-        pml["composer"]
-        .str.lower()
-        .str.replace("-", "")
-        .str.replace(r"[^a-zA-Z]", "", regex=True)
-    )
-
-    # Fill NaN values in the 'composer' column with an empty string before creating the mask
-    mask = pml["composer"].fillna("").str.contains("/", regex=False)
-
-    pml.loc[mask, "arranger"] = (
-        pml.loc[mask, "composer"]
-        .fillna("")
-        .str.split("/", expand=True)
-        .iloc[:, -1]
-        .str.split(" ", expand=True)
-        .iloc[:, -1]
-    )
+    pml = pd.read_csv("pml.csv")
 
     pml = fix_pml(pml)
 
+    pml = adjust_pml(pml)
+
+    pml.fillna("", inplace=True)
+
+    # replace pml in db
+    pml.to_sql("pml", conn, if_exists="replace", index=False)
+
     # create unique_entries table if not exists
     c = conn.cursor()
-    # drop unique_entries table
-    c.execute("DROP TABLE IF EXISTS unique_entries")
+
     c.execute(
         """CREATE TABLE IF NOT EXISTS unique_entries (
-        code TEXT PRIMARY KEY,
+        code TEXT,
         title TEXT,
         composer TEXT,
         composer_last TEXT,
@@ -435,12 +442,8 @@ def main():
 
     conn.commit()
 
-    # get unique entries
-    unique_entries = pd.read_sql("SELECT * FROM unique_entries", conn)
-
     args = [
-        (row._fields, tuple(row), pml, unique_entries, lock)
-        for row in uil_data.itertuples(index=False)
+        (row._fields, tuple(row), pml, lock) for row in uil_data.itertuples(index=False)
     ]
 
     print(pd.Timestamp.now() - start_time)
@@ -461,13 +464,22 @@ def main():
 
     print(pd.Timestamp.now() - start_time)
     # get missing length after
-    conn = sqlite3.connect("combined.db")
+    conn = sqlite3.connect("uil.db")
     uil_data = pd.read_sql(
         'SELECT * FROM results WHERE ("code_1" like "none" or "code_2" like "none" or "code_3" like "none") or ("code_1" is null or "code_2" is null or "code_3" is null) or ("code_1" = "" or "code_2" = "" or "code_3" = "")',
         conn,
     )
 
-    missing_length_after = len(uil_data)
+    missing_length_after = (
+        len(uil_data[uil_data["code_1"].str.lower() == "none"])
+        + len(uil_data[uil_data["code_2"].str.lower() == "none"])
+        + len(uil_data[uil_data["code_3"].str.lower() == "none"])
+    )
+
+    print("Missing length before:", missing_length_before)
+    print("Missing length after:", missing_length_after)
+    print("Missing Entries Found:", missing_length_before - missing_length_after)
+    print("Time taken:", pd.Timestamp.now() - start_time)
 
     conn.close()
 

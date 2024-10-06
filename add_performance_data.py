@@ -305,7 +305,7 @@ def add_average_score(pml, df):
 
 def main():
 
-    conn = sqlite3.connect("combined.db")
+    conn = sqlite3.connect("uil.db")
 
     pml = pd.read_csv("Scrape_data/pml.csv")
     # pml = pd.read_csv("Scrape_data/pml.csv")

@@ -6,7 +6,7 @@ import sqlite3
 from multiprocessing import Pool
 import re
 from fuzzywuzzy import process
-from fix_everything import fix_everything
+from scrape_data.fix_pml import fix_everything
 from tqdm import tqdm
 from add_performance_data import main as add_performance_data
 from multiprocessing import Manager
@@ -135,8 +135,6 @@ def add_concat_to_results(df):
         # make song simple lower
         df[f"title_simple_{i}"] = df[f"title_{i}"].str.lower()
         # add column potential match if there are 5 digits inside parenthesis
-        df[f"potential_match_{i}"] = ""
-        # remove anything in parenthesis
         df[f"title_simple_{i}"] = df[f"title_simple_{i}"].str.replace(
             r"\(.*?\)", "", regex=True
         )
