@@ -5,3 +5,5 @@
 uil_backup.db
 launch.json
 secrets.toml
+*.db
+!uil.db
