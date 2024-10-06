@@ -1,1 +1,0 @@
-select distinct(event) from results;
