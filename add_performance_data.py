@@ -1,6 +1,7 @@
 import pandas as pd
 import sqlite3
 from sklearn.preprocessing import MinMaxScaler
+from scrape_data.fix_pml import fix_pml
 
 
 def add_performance_count(pml, df):
@@ -29,6 +30,10 @@ def add_performance_count(pml, df):
 
     # get rid of nan
     code_counts = code_counts.dropna()
+
+    # get rid of "not_found"
+    code_counts = code_counts.drop("not_found", errors="ignore")
+    code_counts = code_counts.drop("none", errors="ignore")
 
     code_counts = code_counts.reset_index()
 
@@ -305,9 +310,10 @@ def add_average_score(pml, df):
 
 def main():
 
-    conn = sqlite3.connect("uil.db")
+    conn = sqlite3.connect("uil_2.db")
 
-    pml = pd.read_csv("Scrape_data/pml.csv")
+    pml = pd.read_csv("pml_24-25.csv")
+    pml = fix_pml(pml)
     # pml = pd.read_csv("Scrape_data/pml.csv")
     df = pd.read_sql_query("SELECT * FROM results", conn)
 

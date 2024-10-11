@@ -5,8 +5,6 @@ import streamlit as st
 import plotly as py
 import altair as alt
 import plotly.express as px
-import libsql_experimental as libsql
-from libsql_client import Client
 
 
 @st.cache_resource
@@ -500,6 +498,20 @@ def main():
         if event_name_select:
             filtered_pml = filtered_pml[filtered_pml["event_name"] == event_name_select]
 
+            if "chorus" in event_name_select.lower():
+                accompaniment_select = st.selectbox(
+                    "Select accompaniment",
+                    options=["Both", "A Capella", "Accompanied"],
+                )
+                accompt_dict = {"A Capella": "(a cappella)", "Accompanied": "(accomp)"}
+
+                if accompaniment_select != "Both":
+                    filtered_pml = filtered_pml[
+                        filtered_pml["specification"].str.contains(
+                            accompt_dict[accompaniment_select], na=False
+                        )
+                    ]
+
         min_performance_count = st.slider(
             "Minimum Performance Count",
             0,
@@ -524,6 +536,7 @@ def main():
                 "average_concert_score",
                 "average_sight_reading_score",
                 "song_score",
+                "specification",
             ]
         ]
 

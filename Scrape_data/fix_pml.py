@@ -38,6 +38,8 @@ def fix_pml(pml_df):
     # only take where not 0
     pml = pml[pml["grade"] != 0]
 
+    pml["event_name"] = pml["event_name"].str.replace("/", "-").str.lower()
+
     # # drop results table and replace it with a copy of results_with_codes table
 
     # df = pd.read_sql_query("SELECT * FROM results", conn)

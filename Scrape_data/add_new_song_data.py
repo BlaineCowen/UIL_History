@@ -6,9 +6,10 @@ import sqlite3
 from multiprocessing import Pool
 import re
 from fuzzywuzzy import process
-from fix_pml import fix_pml
+from scrape_data.fix_pml import fix_pml
 from tqdm import tqdm
-from add_new_performance_data import main as add_new_performance_data
+
+# from add_new_performance_data import main as add_new_performance_data
 from multiprocessing import Manager
 
 
@@ -56,17 +57,22 @@ def adjust_pml(pml):
     pml["title"] = pml["title"].str.lower()
     pml["composer"] = pml["composer"].str.lower()
 
-    pml["arranger"] = pml["arranger"].str.lower()
+    pml["arranger"] = (
+        pml["arranger"].str.lower().str.split("/").str[-1].str.split(" ").str[-1]
+    )
+    pml["arranger_search"] = pml["arranger"].str.replace(r"[^a-zA-Z]", "", regex=True)
     pml["event_name"] = pml["event_name"].str.lower()
 
+    pml["event_name"] = pml["event_name"].str.replace("band", "concert band")
     # create song search column replace anything inside of parenthesis!
     pml["song_search"] = pml["title"].str.replace(r"\(.*?\)", "", regex=True)
     # remove anything not a letter
     pml["song_search"] = pml["song_search"].str.replace(r"[^a-zA-Z]", "", regex=True)
 
     # create song search with specification column
-    pml["song_search_with_specification"] = pml["title"].str.replace(
-        r"[^a-zA-Z]", "", regex=True
+    pml["song_search_with_specification"] = (
+        pml["title"].str.replace(r"[^a-zA-Z]", "", regex=True)
+        + pml["specification"].str.replace(r"[^a-zA-Z]", "", regex=True).str.lower()
     )
 
     # create song simple column
@@ -207,7 +213,7 @@ def fuzzy_search(
 
     possible_match_df = pml[mask]
     if len(possible_match_df) == 0:
-        return None
+        return "not_found"
 
     else:
         choices = (
@@ -226,7 +232,7 @@ def fuzzy_search(
             if not result.empty:
                 result = result.sort_values(by="grade", ascending=False)
                 return result["code"].iloc[0]
-    return None
+    return "not_found"
 
 
 def update_db(code, n, entry_number, lock):
@@ -252,6 +258,8 @@ def update_unique_entries(
 ):
     if code is None:
         code = "none"
+    if code == "none":
+        code = "not_found"
     try:
         lock.acquire()
         conn = sqlite3.connect("uil.db")
@@ -287,7 +295,11 @@ def process_row_exact(args):
         entry_number = row[col.index("entry_number")]
 
         check_code = row[col.index(f"code_{i}")]
-        if check_code.lower() != "none" and check_code != "":
+        if (
+            check_code.lower() != "none"
+            and check_code != ""
+            and check_code != "not_found"
+        ):
             code = check_code
             continue
 
@@ -486,5 +498,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    add_new_performance_data()
     print("done")
