@@ -641,7 +641,7 @@ def main():
                 use_container_width=True,
             )
 
-        if not selected_row.empty & selected_row["min_performance_count"] != 0:
+        if not selected_row.empty & selected_row["performance_count"] != 0:
             selected_code = str(selected_row["code"].values[0])
             full_title_info = pml_df[pml_df["code"] == selected_code]
             remaining_composer = full_title_info["composer"].values[0]
