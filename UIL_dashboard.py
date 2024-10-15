@@ -565,6 +565,8 @@ def main():
             ]
         ]
 
+        display_pml = display_pml.sort_values(by="code")
+
         # Create a copy of the column names with replacements
         display_columns = [col.replace("_", " ").title() for col in display_pml.columns]
 
@@ -767,7 +769,7 @@ def main():
             fig.update_yaxes(
                 title_text="Avg. Concert Score",
                 secondary_y=True,
-                range=[min_value, 1],
+                range=[min_value + 0.5, 0.5],
                 autorange=False,
             )
 
