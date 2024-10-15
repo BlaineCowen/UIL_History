@@ -646,172 +646,204 @@ def main():
                 use_container_width=True,
             )
 
-    if not selected_row.empty and selected_row["performance_count"].iloc[0] != 0:
-        selected_code = str(selected_row["code"].values[0])
-        full_title_info = pml_df[pml_df["code"] == selected_code]
-        remaining_composer = full_title_info["composer"].values[0]
-        remaining_title = full_title_info["title"].values[0]
-        earliest_year = int(full_title_info["earliest_year"].values[0])
-        grade = int(full_title_info["grade"].values[0])
+        if not selected_row.empty and selected_row["performance_count"].iloc[0] != 0:
+            selected_code = str(selected_row["code"].values[0])
+            full_title_info = pml_df[pml_df["code"] == selected_code]
+            remaining_composer = full_title_info["composer"].values[0]
+            remaining_title = full_title_info["title"].values[0]
+            earliest_year = int(full_title_info["earliest_year"].values[0])
+            grade = int(full_title_info["grade"].values[0])
 
-        st.write(f"Data from {remaining_title} by {remaining_composer}")
+            st.write(f"Data from {remaining_title} by {remaining_composer}")
 
-        # graph how many times it has been performed compared to all other songs in the event
-        remaining_perf_count = selected_row["performance_count"].values[0]
+            # graph how many times it has been performed compared to all other songs in the event
+            remaining_perf_count = selected_row["performance_count"].values[0]
 
-        if not event_name_select:
-            event_name_select = selected_row["event_name"].values[0]
+            if not event_name_select:
+                event_name_select = selected_row["event_name"].values[0]
 
-        # line chart of performances over time
-        perf_over_time = results_df[
-            results_df["event"].str.contains(event_name_select)
-            & (results_df["year"].astype(int) >= earliest_year)
-            & (
-                (results_df["code_1"].isin(pml_df[pml_df["grade"] == grade]["code"]))
-                | (results_df["code_2"].isin(pml_df[pml_df["grade"] == grade]["code"]))
-                | (results_df["code_3"].isin(pml_df[pml_df["grade"] == grade]["code"]))
+            # line chart of performances over time
+            perf_over_time = results_df[
+                results_df["event"].str.contains(event_name_select)
+                & (results_df["year"].astype(int) >= earliest_year)
+                & (
+                    (
+                        results_df["code_1"].isin(
+                            pml_df[pml_df["grade"] == grade]["code"]
+                        )
+                    )
+                    | (
+                        results_df["code_2"].isin(
+                            pml_df[pml_df["grade"] == grade]["code"]
+                        )
+                    )
+                    | (
+                        results_df["code_3"].isin(
+                            pml_df[pml_df["grade"] == grade]["code"]
+                        )
+                    )
+                )
+            ]
+
+            all_perf_df = results_df[
+                results_df["event"].str.contains(event_name_select)
+                & (results_df["year"].astype(int) >= earliest_year)
+                & (
+                    (
+                        results_df["code_1"].isin(
+                            pml_df[pml_df["grade"] == grade]["code"]
+                        )
+                    )
+                    | (
+                        results_df["code_2"].isin(
+                            pml_df[pml_df["grade"] == grade]["code"]
+                        )
+                    )
+                    | (
+                        results_df["code_3"].isin(
+                            pml_df[pml_df["grade"] == grade]["code"]
+                        )
+                    )
+                )
+            ]
+
+            song_performances = all_perf_df[
+                (all_perf_df["code_1"] == selected_code)
+                | (all_perf_df["code_2"] == selected_code)
+                | (all_perf_df["code_3"] == selected_code)
+            ]
+
+            # Group by year and count the performances, then rename the column to 'count'
+            song_performances_count = (
+                song_performances.groupby("year").size().reset_index(name="count")
             )
-        ]
 
-        all_perf_df = results_df[
-            results_df["event"].str.contains(event_name_select)
-            & (results_df["year"].astype(int) >= earliest_year)
-            & (
-                (results_df["code_1"].isin(pml_df[pml_df["grade"] == grade]["code"]))
-                | (results_df["code_2"].isin(pml_df[pml_df["grade"] == grade]["code"]))
-                | (results_df["code_3"].isin(pml_df[pml_df["grade"] == grade]["code"]))
+            # Grouping and preparing data
+            song_performances_avg_score = (
+                song_performances.groupby("year")["concert_final_score"]
+                .mean()
+                .sort_index()
             )
-        ]
 
-        song_performances = all_perf_df[
-            (all_perf_df["code_1"] == selected_code)
-            | (all_perf_df["code_2"] == selected_code)
-            | (all_perf_df["code_3"] == selected_code)
-        ]
+            # Create a subplot with shared x-axis and two y-axes
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-        # Group by year and count the performances, then rename the column to 'count'
-        song_performances_count = (
-            song_performances.groupby("year").size().reset_index(name="count")
-        )
+            # Add the 'count' bar chart (primary y-axis)
+            fig.add_trace(
+                go.Bar(
+                    x=song_performances_count["year"],
+                    y=song_performances_count["count"],
+                    name="Performance Count",
+                    marker_color="rgba(55, 83, 109, 0.7)",  # Color for bars
+                ),
+                secondary_y=False,
+            )
 
-        # Grouping and preparing data
-        song_performances_avg_score = (
-            song_performances.groupby("year")["concert_final_score"].mean().sort_index()
-        )
+            # Add the 'average concert score' line chart (secondary y-axis)
+            fig.add_trace(
+                go.Scatter(
+                    x=song_performances_avg_score.index,
+                    y=song_performances_avg_score,
+                    mode="lines+markers",  # Adds markers to the line
+                    name="Avg. Concert Score",
+                    line=dict(color="rgb(26, 118, 255)"),  # Color for line
+                ),
+                secondary_y=True,
+            )
 
-        # Create a subplot with shared x-axis and two y-axes
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
+            # Update layout with titles and legends
+            fig.update_layout(
+                title_text=f"Performances (Bar) and Avg. Concert Scores (Line) for {remaining_title}",
+                showlegend=False,
+                xaxis=dict(title="Year"),
+            )
 
-        # Add the 'count' bar chart (primary y-axis)
-        fig.add_trace(
-            go.Bar(
-                x=song_performances_count["year"],
-                y=song_performances_count["count"],
-                name="Performance Count",
-                marker_color="rgba(55, 83, 109, 0.7)",  # Color for bars
-            ),
-            secondary_y=False,
-        )
+            # Update y-axis titles
+            fig.update_yaxes(
+                title_text="Performance Count", secondary_y=False, showgrid=False
+            )
+            min_value = song_performances_avg_score.max()
+            fig.update_xaxes(showgrid=False)  # Disable gridlines across x-axis
+            fig.update_yaxes(
+                title_text="Avg. Concert Score",
+                secondary_y=True,
+                range=[min_value, 1],
+                autorange=False,
+            )
 
-        # Add the 'average concert score' line chart (secondary y-axis)
-        fig.add_trace(
-            go.Scatter(
-                x=song_performances_avg_score.index,
-                y=song_performances_avg_score,
-                mode="lines+markers",  # Adds markers to the line
-                name="Avg. Concert Score",
-                line=dict(color="rgb(26, 118, 255)"),  # Color for line
-            ),
-            secondary_y=True,
-        )
+            # Display the combined chart
+            st.plotly_chart(fig, key="combined_chart_pml")
 
-        # Update layout with titles and legends
-        fig.update_layout(
-            title_text=f"Performances (Bar) and Avg. Concert Scores (Line) for {remaining_title}",
-            showlegend=True,
-            xaxis=dict(title="Year"),
-        )
+            # # Create the line chart with the updated DataFrame
+            # line_chart_count = px.line(
+            #     song_performances_count,
+            #     x="year",
+            #     y="count",
+            #     title=f"Performances for {remaining_title}",
+            # ).update_layout(showlegend=False)
 
-        # Update y-axis titles
-        fig.update_yaxes(
-            title_text="Performance Count", secondary_y=False, showgrid=False
-        )
-        min_value = song_performances_avg_score.max()
-        fig.update_xaxes(showgrid=False)  # Disable gridlines across x-axis
-        fig.update_yaxes(
-            title_text="Avg. Concert Score",
-            secondary_y=True,
-            range=[min_value, 1],
-            autorange=False,
-        )
+            # line_chart_score = px.line(
+            #     song_performances.groupby("year")["concert_final_score"]
+            #     .mean()
+            #     .sort_index(),
+            #     title=f"Avg. Concert Scores for {remaining_title}",
+            # ).update_layout(showlegend=False)
 
-        # Display the combined chart
-        st.plotly_chart(fig, key="combined_chart_pml")
+            # line_chart_score.update_yaxes(autorange="reversed")
 
-        # # Create the line chart with the updated DataFrame
-        # line_chart_count = px.line(
-        #     song_performances_count,
-        #     x="year",
-        #     y="count",
-        #     title=f"Performances for {remaining_title}",
-        # ).update_layout(showlegend=False)
+            # st.plotly_chart(line_chart_count, key="line_chart_count_pml")
+            # st.plotly_chart(line_chart_score, key="line_chart_score_pml")
+            song_performances.columns = song_performances.columns.str.replace(
+                "_", " "
+            ).str.title()
+            song_performances.loc[:, "Choice 1"] = song_performances[
+                "Choice 1"
+            ].str.title()
+            song_performances.loc[:, "Choice 2"] = song_performances[
+                "Choice 2"
+            ].str.title()
+            song_performances.loc[:, "Choice 3"] = song_performances[
+                "Choice 3"
+            ].str.title()
 
-        # line_chart_score = px.line(
-        #     song_performances.groupby("year")["concert_final_score"]
-        #     .mean()
-        #     .sort_index(),
-        #     title=f"Avg. Concert Scores for {remaining_title}",
-        # ).update_layout(showlegend=False)
+            # pie chart
 
-        # line_chart_score.update_yaxes(autorange="reversed")
+            st.dataframe(
+                song_performances[
+                    [
+                        "Year",
+                        "School",
+                        "Director",
+                        "Classification",
+                        "Choice 1",
+                        "Choice 2",
+                        "Choice 3",
+                        "Concert Final Score",
+                        "Sight Reading Final Score",
+                    ]
+                ],
+                column_config={
+                    "Year": st.column_config.NumberColumn(format="%.0f"),
+                },
+                hide_index=True,
+            )
 
-        # st.plotly_chart(line_chart_count, key="line_chart_count_pml")
-        # st.plotly_chart(line_chart_score, key="line_chart_score_pml")
-        song_performances.columns = song_performances.columns.str.replace(
-            "_", " "
-        ).str.title()
-        song_performances.loc[:, "Choice 1"] = song_performances["Choice 1"].str.title()
-        song_performances.loc[:, "Choice 2"] = song_performances["Choice 2"].str.title()
-        song_performances.loc[:, "Choice 3"] = song_performances["Choice 3"].str.title()
+            all_perf_count = all_perf_df.shape[0]
 
-        # pie chart
+            # make a pie chart
+            pie_remaining = px.pie(
+                values=[
+                    remaining_perf_count,
+                    all_perf_count - remaining_perf_count,
+                ],
+                names=[
+                    f"{remaining_title}",
+                    f"All Other Songs in category since {earliest_year}",
+                ],
+                title=f"Share of {event_name_select} grade {grade} performances",
+            )
 
-        st.dataframe(
-            song_performances[
-                [
-                    "Year",
-                    "School",
-                    "Director",
-                    "Classification",
-                    "Choice 1",
-                    "Choice 2",
-                    "Choice 3",
-                    "Concert Final Score",
-                    "Sight Reading Final Score",
-                ]
-            ],
-            column_config={
-                "Year": st.column_config.NumberColumn(format="%.0f"),
-            },
-            hide_index=True,
-        )
-
-        all_perf_count = all_perf_df.shape[0]
-
-        # make a pie chart
-        pie_remaining = px.pie(
-            values=[
-                remaining_perf_count,
-                all_perf_count - remaining_perf_count,
-            ],
-            names=[
-                f"{remaining_title}",
-                f"All Other Songs in category since {earliest_year}",
-            ],
-            title=f"Share of {event_name_select} grade {grade} performances",
-        )
-
-        st.plotly_chart(pie_remaining)
+            st.plotly_chart(pie_remaining)
 
     st.write(
         "This dashboard was created by [Blaine Cowen](mailto:blaine.cowen@gmail.com)"
