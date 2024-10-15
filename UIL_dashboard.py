@@ -10,7 +10,7 @@ import plotly.express as px
 @st.cache_resource
 def collect_dbs():
     # Create a SQLite connection
-    conn = sqlite3.connect("uil_2.db")
+    conn = sqlite3.connect("uil.db")
     results_df = pd.read_sql_query("SELECT * FROM results", conn)
     pml_df = pd.read_sql_query("SELECT * FROM pml", conn)
     conn.close()
