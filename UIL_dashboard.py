@@ -10,7 +10,7 @@ import plotly.express as px
 @st.cache_resource
 def collect_dbs():
     # Create a SQLite connection
-    conn = sqlite3.connect("uil.db")
+    conn = sqlite3.connect("uil_2.db")
     results_df = pd.read_sql_query("SELECT * FROM results", conn)
     pml_df = pd.read_sql_query("SELECT * FROM pml", conn)
     conn.close()
@@ -32,7 +32,10 @@ def get_db(df):
 
     def fix_date(date):
         try:
-            new_date = date.split(" ")[0]
+            if isinstance(date, pd.Timestamp):
+                new_date = date.strftime("%Y-%m-%d")
+            else:
+                new_date = date.split(" ")[0]
         except Exception as e:
             # Log the error or handle it as needed
             print(f"Error processing date: {date}, Error: {e}")
@@ -59,6 +62,7 @@ def get_db(df):
     df["event"] = df["event"].str.replace("string orchestra", "String Orchestra")
     df["event"] = df["event"].str.replace("full orchestra", "Full Orchestra")
     df["event"] = df["event"].str.replace("treble chorus", "Treble Chorus")
+    df["event"] = df["event"].str.title()
     # drop any rows where all scores are na
     df = df.dropna(subset=score_subset, how="all")
 
@@ -168,7 +172,9 @@ def clean_data():
 
 def clean_pml(pml):
 
-    pml[["arranger", "composer"]] = pml[["arranger", "composer"]].fillna("")
+    pml[["arranger", "composer", "specification"]] = pml[
+        ["arranger", "composer", "specification"]
+    ].fillna("")
 
     # only keep rows where event contains band, chorus, or orchestra
     pml = pml[
@@ -211,9 +217,15 @@ def clean_pml(pml):
     pml["composer_search"] = pml["composer"].str.lower() + pml["arranger"].str.lower()
     pml["composer_search"] = pml["composer_search"].str.replace(r"[^\w\s]", "")
 
-    pml["total_search"] = pml["song_search"] + pml["composer_search"]
-    pml["total_search"] = pml["total_search"].str.replace(r"[^\w\s]", "")
+    pml["total_search"] = (
+        pml["song_search"] + pml["composer_search"] + pml["specification"]
+    )
+    pml["total_search"] = (
+        pml["total_search"].str.replace(r"[^\w\s]", "", regex=True).str.lower()
+    )
     pml["total_search"] = pml["total_search"].str.replace(r" ", "")
+    # replace anything that is not a-z with ""
+    pml["total_search"] = pml["total_search"].str.replace(r"[^a-zA-Z]", "", regex=True)
 
     return pml
 
@@ -399,6 +411,8 @@ def main():
                 ]
             )
 
+            line_chart_c.update_yaxes(autorange="reversed")
+
             st.plotly_chart(line_chart_c)
 
             st.write("Sight Reading Scores Over Time")
@@ -427,10 +441,12 @@ def main():
                         mode="lines",
                         name="All Results",
                     ),
-                ]
+                ],
             )
 
-            st.plotly_chart(line_chart_sr)
+            line_chart_sr.update_yaxes(autorange="reversed")
+
+            st.plotly_chart(line_chart_sr, key="line_chart_sr")
 
             # create a pie chart of the concert scores
             st.write("Concert Scores")
@@ -444,7 +460,7 @@ def main():
                     )
                 ]
             )
-            st.plotly_chart(pie_chart_c)
+            st.plotly_chart(pie_chart_c, key="pie_chart_c")
 
             sight_reading_scores = filter_df["sight_reading_final_score"].value_counts()
             st.write("Sight Reading Scores")
@@ -457,7 +473,7 @@ def main():
                     )
                 ]
             )
-            st.plotly_chart(pie_chart_SR)
+            st.plotly_chart(pie_chart_SR, key="pie_chart_SRresults")
 
         # # write len
         # st.write("Number of rows:", len(df))
@@ -482,7 +498,9 @@ def main():
 
         song_name_input = st.text_input("Search Titles or Composers", "")
         song_name_input = song_name_input.lower()
-        song_name_input = re.sub(r"\s+", "", song_name_input)
+        song_name_input = re.sub(r"[^\w\s]", "", song_name_input)
+        # remove anything that is not a-z
+        song_name_input = re.sub(r"[^a-zA-Z]", "", song_name_input)
 
         if song_name_input:
             filtered_pml = filtered_pml[
@@ -521,13 +539,14 @@ def main():
 
         if min_performance_count:
             filtered_pml = filtered_pml[
-                filtered_pml["performance_count"] > min_performance_count
+                filtered_pml["performance_count"] >= min_performance_count
             ]
 
         # only keep columns
         display_pml = filtered_pml[
             [
                 "grade",
+                "event_name",
                 "title",
                 "composer",
                 "arranger",
@@ -537,6 +556,7 @@ def main():
                 "average_sight_reading_score",
                 "song_score",
                 "specification",
+                "total_search",
             ]
         ]
 
@@ -544,7 +564,7 @@ def main():
         display_columns = [col.replace("_", " ").title() for col in display_pml.columns]
 
         # Display the dataframe with modified column names
-        st.dataframe(
+        pml_write = st.dataframe(
             display_pml.rename(columns=dict(zip(display_pml.columns, display_columns))),
             column_config={
                 "Song Score": st.column_config.NumberColumn(
@@ -552,8 +572,13 @@ def main():
                     format="%.2f",
                 )
             },
+            selection_mode="single-row",
+            on_select="rerun",
             hide_index=True,
         )
+
+        if pml_write:
+            selected_row = display_pml.iloc[pml_write.selection["rows"]]
 
         graphed_pml = filtered_pml[
             # no nan values
@@ -562,6 +587,7 @@ def main():
             # no zeros
             & (filtered_pml["average_concert_score"] != 0)
             & (filtered_pml["average_sight_reading_score"] != 0)
+            & (filtered_pml["performance_count"] > 10)
         ]
 
         if graphed_pml[graphed_pml["performance_count"] > min_performance_count].empty:
@@ -615,35 +641,145 @@ def main():
                 use_container_width=True,
             )
 
-        if len(graphed_pml) == 1:
-            remaining_row = graphed_pml.iloc[0]
-            remaining_title = remaining_row["title"]
-            remaining_composer = remaining_row["composer"]
-            remaining_year = remaining_row["earliest_year"]
+        if not selected_row.empty:
+            selected_code = str(selected_row["code"].values[0])
+            full_title_info = pml_df[pml_df["code"] == selected_code]
+            remaining_composer = full_title_info["composer"].values[0]
+            remaining_title = full_title_info["title"].values[0]
+            earliest_year = int(full_title_info["earliest_year"].values[0])
+            grade = int(full_title_info["grade"].values[0])
+
             st.write(f"Data from {remaining_title} by {remaining_composer}")
 
             # graph how many times it has been performed compared to all other songs in the event
-            remaining_perf_count = remaining_row["performance_count"]
+            remaining_perf_count = selected_row["performance_count"].values[0]
 
             if not event_name_select:
-                event_name_select = remaining_row["event_name"]
+                event_name_select = selected_row["event_name"].values[0]
 
-            all_perf_count = results_df[
+            # line chart of performances over time
+            perf_over_time = results_df[
                 results_df["event"].str.contains(event_name_select)
-                & (results_df["year"] >= graphed_pml["earliest_year"].min())
-            ]["song_concat"].value_counts()
+                & (results_df["year"].astype(int) >= earliest_year)
+                & (
+                    (
+                        results_df["code_1"].isin(
+                            pml_df[pml_df["grade"] == grade]["code"]
+                        )
+                    )
+                    | (
+                        results_df["code_2"].isin(
+                            pml_df[pml_df["grade"] == grade]["code"]
+                        )
+                    )
+                    | (
+                        results_df["code_3"].isin(
+                            pml_df[pml_df["grade"] == grade]["code"]
+                        )
+                    )
+                )
+            ]
+
+            all_perf_df = results_df[
+                results_df["event"].str.contains(event_name_select)
+                & (results_df["year"].astype(int) >= earliest_year)
+                & (
+                    (
+                        results_df["code_1"].isin(
+                            pml_df[pml_df["grade"] == grade]["code"]
+                        )
+                    )
+                    | (
+                        results_df["code_2"].isin(
+                            pml_df[pml_df["grade"] == grade]["code"]
+                        )
+                    )
+                    | (
+                        results_df["code_3"].isin(
+                            pml_df[pml_df["grade"] == grade]["code"]
+                        )
+                    )
+                )
+            ]
+
+            song_performances = all_perf_df[
+                (all_perf_df["code_1"] == selected_code)
+                | (all_perf_df["code_2"] == selected_code)
+                | (all_perf_df["code_3"] == selected_code)
+            ]
+
+            # Group by year and count the performances, then rename the column to 'count'
+            song_performances_count = (
+                song_performances.groupby("year").size().reset_index(name="count")
+            )
+
+            # Create the line chart with the updated DataFrame
+            line_chart_count = px.line(
+                song_performances_count,
+                x="year",
+                y="count",
+                title=f"Performances for {remaining_title}",
+            ).update_layout(showlegend=False)
+
+            line_chart_score = px.line(
+                song_performances.groupby("year")["concert_final_score"]
+                .mean()
+                .sort_index(),
+                title=f"Avg. Concert Scores for {remaining_title}",
+            ).update_layout(showlegend=False)
+
+            line_chart_score.update_yaxes(autorange="reversed")
+
+            st.plotly_chart(line_chart_count, key="line_chart_count_pml")
+            st.plotly_chart(line_chart_score, key="line_chart_score_pml")
+            song_performances.columns = song_performances.columns.str.replace(
+                "_", " "
+            ).str.title()
+            song_performances.loc[:, "Choice 1"] = song_performances[
+                "Choice 1"
+            ].str.title()
+            song_performances.loc[:, "Choice 2"] = song_performances[
+                "Choice 2"
+            ].str.title()
+            song_performances.loc[:, "Choice 3"] = song_performances[
+                "Choice 3"
+            ].str.title()
+
+            # pie chart
+
+            st.dataframe(
+                song_performances[
+                    [
+                        "Year",
+                        "School",
+                        "Director",
+                        "Classification",
+                        "Choice 1",
+                        "Choice 2",
+                        "Choice 3",
+                        "Concert Final Score",
+                        "Sight Reading Final Score",
+                    ]
+                ],
+                column_config={
+                    "Year": st.column_config.NumberColumn(format="%.0f"),
+                },
+                hide_index=True,
+            )
+
+            all_perf_count = all_perf_df.shape[0]
 
             # make a pie chart
             pie_remaining = px.pie(
                 values=[
                     remaining_perf_count,
-                    all_perf_count.sum() - remaining_perf_count,
+                    all_perf_count - remaining_perf_count,
                 ],
                 names=[
-                    f"Selected Song",
-                    f"All Other Songs in category since {int(remaining_year)}",
+                    f"{remaining_title}",
+                    f"All Other Songs in category since {earliest_year}",
                 ],
-                title=f"Remaining Song vs All Other Songs in {event_name_select}",
+                title=f"Share of {event_name_select} grade {grade} performances",
             )
 
             st.plotly_chart(pie_remaining)

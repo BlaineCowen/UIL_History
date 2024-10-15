@@ -63,143 +63,141 @@ def add_average_score(pml, df):
     # also sr
     df = df[df["sight_reading_final_score"] != 0]
 
-    if "average_concert_score" not in df.columns:
+    df["average_concert_score"] = df[
+        ["concert_score_1", "concert_score_2", "concert_score_3"]
+    ].mean(axis=1)
+    df["average_sight_reading_score"] = df[
+        [
+            "sight_reading_score_1",
+            "sight_reading_score_2",
+            "sight_reading_score_3",
+        ]
+    ].mean(axis=1)
 
-        df["average_concert_score"] = df[
-            ["concert_score_1", "concert_score_2", "concert_score_3"]
-        ].mean(axis=1)
-        df["average_sight_reading_score"] = df[
-            [
-                "sight_reading_score_1",
-                "sight_reading_score_2",
-                "sight_reading_score_3",
-            ]
-        ].mean(axis=1)
+    def adjust_results_df(df):
 
-        def adjust_results_df(df):
+        score_subset = [
+            "concert_score_1",
+            "concert_score_2",
+            "concert_score_3",
+            "concert_final_score",
+            "sight_reading_score_1",
+            "sight_reading_score_2",
+            "sight_reading_score_3",
+            "sight_reading_final_score",
+        ]
 
-            score_subset = [
-                "concert_score_1",
-                "concert_score_2",
-                "concert_score_3",
-                "concert_final_score",
-                "sight_reading_score_1",
-                "sight_reading_score_2",
-                "sight_reading_score_3",
-                "sight_reading_final_score",
-            ]
+        df["gen_event"] = ""
+        df.loc[df["event"].str.lower().str.contains("band", na=False), "gen_event"] = (
+            "Band"
+        )
+        df.loc[
+            df["event"].str.lower().str.contains("chorus", na=False), "gen_event"
+        ] = "Chorus"
+        df.loc[
+            df["event"].str.lower().str.contains("orchestra", na=False), "gen_event"
+        ] = "Orchestra"
 
-            df["gen_event"] = ""
-            df.loc[df["event"].str.contains("Band", na=False), "gen_event"] = "Band"
-            df.loc[df["event"].str.contains("Chorus", na=False), "gen_event"] = "Chorus"
-            df.loc[df["event"].str.contains("Orchestra", na=False), "gen_event"] = (
-                "Orchestra"
-            )
+        # drop any rows where all scores are na
+        df = df.dropna(subset=score_subset, how="all")
 
-            # drop any rows where all scores are na
-            df = df.dropna(subset=score_subset, how="all")
+        # force numeric scores to be numeric
+        df[score_subset] = df[score_subset].apply(pd.to_numeric, errors="coerce")
 
-            # force numeric scores to be numeric
-            df[score_subset] = df[score_subset].apply(pd.to_numeric, errors="coerce")
+        # fill everything else with ""
+        cols_not_in_subset = df.columns.difference(score_subset)
+        df[cols_not_in_subset] = df[cols_not_in_subset].fillna("")
 
-            # fill everything else with ""
-            cols_not_in_subset = df.columns.difference(score_subset)
-            df[cols_not_in_subset] = df[cols_not_in_subset].fillna("")
+        df["song_concat"] = df["title_1"] + " " + df["title_2"] + " " + df["title_3"]
+        df["composer_concat"] = (
+            df["composer_1"] + " " + df["composer_2"] + " " + df["composer_3"]
+        )
+        # remove any non-alphanumeric characters and spaces
+        df["song_concat"] = df["song_concat"].str.replace(r"[^\w\s]", "")
+        df["song_concat"] = df["song_concat"].str.replace(" ", "")
 
-            df["song_concat"] = (
-                df["title_1"] + " " + df["title_2"] + " " + df["title_3"]
-            )
-            df["composer_concat"] = (
-                df["composer_1"] + " " + df["composer_2"] + " " + df["composer_3"]
-            )
-            # remove any non-alphanumeric characters and spaces
-            df["song_concat"] = df["song_concat"].str.replace(r"[^\w\s]", "")
-            df["song_concat"] = df["song_concat"].str.replace(" ", "")
+        df["composer_concat"] = df["composer_concat"].str.replace(r"[^\w\s]", "")
+        df["composer_concat"] = df["composer_concat"].str.replace(r" ", "")
 
-            df["composer_concat"] = df["composer_concat"].str.replace(r"[^\w\s]", "")
-            df["composer_concat"] = df["composer_concat"].str.replace(r" ", "")
+        # make all characters lowercase
+        df["song_concat"] = df["song_concat"].str.lower()
+        df["composer_concat"] = df["composer_concat"].str.lower()
 
-            # make all characters lowercase
-            df["song_concat"] = df["song_concat"].str.lower()
-            df["composer_concat"] = df["composer_concat"].str.lower()
+        # fix school names
+        df["school_search"] = df["school"].str.strip().str.lower()
+        df["school_search"] = df["school_search"].str.replace(r"[^\w\s]", "")
+        df["school_search"] = df["school_search"].str.replace(r" ", "")
 
-            # fix school names
-            df["school_search"] = df["school"].str.strip().str.lower()
-            df["school_search"] = df["school_search"].str.replace(r"[^\w\s]", "")
-            df["school_search"] = df["school_search"].str.replace(r" ", "")
+        # # director search
+        # df["director_search"] = df["director"].str.lower()
+        # df["additional_director_search"] = df["additional_sirector"].str.lower()
 
-            df["event"] = df["event"].str.split("-").str.get(1)
+        # drop if contest_average_concert_score exists
+        df = df.drop(columns=["contest_average_concert_score"], errors="ignore")
 
-            # # director search
-            # df["director_search"] = df["director"].str.lower()
-            # df["additional_director_search"] = df["additional_sirector"].str.lower()
+        # fix date
+        df["contest_date"] = pd.to_datetime(df["contest_date"], errors="coerce")
 
-            # fix date
-            df["contest_date"] = pd.to_datetime(df["contest_date"], errors="coerce")
+        # change contest_date to just the year
+        df["year"] = df["contest_date"].dt.year.astype(str)
 
-            # change contest_date to just the year
-            df["year"] = df["contest_date"].dt.year.astype(str)
+        df = df[df["concert_score_1"] != 0]
+        df = df[df["concert_score_2"] != 0]
+        df = df[df["concert_score_3"] != 0]
+        df = df[df["concert_final_score"] != 0]
+        df = df[df["sight_reading_score_1"] != 0]
+        df = df[df["sight_reading_score_2"] != 0]
+        df = df[df["sight_reading_score_3"] != 0]
+        df = df[df["sight_reading_final_score"] != 0]
 
-            df = df[df["concert_score_1"] != 0]
-            df = df[df["concert_score_2"] != 0]
-            df = df[df["concert_score_3"] != 0]
-            df = df[df["concert_final_score"] != 0]
-            df = df[df["sight_reading_score_1"] != 0]
-            df = df[df["sight_reading_score_2"] != 0]
-            df = df[df["sight_reading_score_3"] != 0]
-            df = df[df["sight_reading_final_score"] != 0]
+        # change all concert scores to int
+        df["concert_score_1"] = df["concert_score_1"].astype(float).astype(int)
+        df["concert_score_2"] = df["concert_score_2"].astype(float).astype(int)
+        df["concert_score_3"] = df["concert_score_3"].astype(float).astype(int)
+        df["concert_final_score"] = df["concert_final_score"].astype(float).astype(int)
+        df["sight_reading_score_1"] = (
+            df["sight_reading_score_1"].astype(float).astype(int)
+        )
+        df["sight_reading_score_2"] = (
+            df["sight_reading_score_2"].astype(float).astype(int)
+        )
+        df["sight_reading_score_3"] = (
+            df["sight_reading_score_3"].astype(float).astype(int)
+        )
+        df["sight_reading_final_score"] = (
+            df["sight_reading_final_score"].astype(float).astype(int)
+        )
 
-            # change all concert scores to int
-            df["concert_score_1"] = df["concert_score_1"].astype(float).astype(int)
-            df["concert_score_2"] = df["concert_score_2"].astype(float).astype(int)
-            df["concert_score_3"] = df["concert_score_3"].astype(float).astype(int)
-            df["concert_final_score"] = (
-                df["concert_final_score"].astype(float).astype(int)
-            )
-            df["sight_reading_score_1"] = (
-                df["sight_reading_score_1"].astype(float).astype(int)
-            )
-            df["sight_reading_score_2"] = (
-                df["sight_reading_score_2"].astype(float).astype(int)
-            )
-            df["sight_reading_score_3"] = (
-                df["sight_reading_score_3"].astype(float).astype(int)
-            )
-            df["sight_reading_final_score"] = (
-                df["sight_reading_final_score"].astype(float).astype(int)
-            )
+        df["average_concert_score"] = (
+            df["concert_score_1"] + df["concert_score_2"] + df["concert_score_3"]
+        ) / 3
+        # round
+        df["average_concert_score"] = df["average_concert_score"].round(2)
 
-            df["average_concert_score"] = (
-                df["concert_score_1"] + df["concert_score_2"] + df["concert_score_3"]
-            ) / 3
-            # round
-            df["average_concert_score"] = df["average_concert_score"].round(2)
+        df["average_sight_reading_score"] = (
+            df["sight_reading_score_1"]
+            + df["sight_reading_score_2"]
+            + df["sight_reading_score_3"]
+        ) / 3
+        # round
+        df["average_sight_reading_score"] = df["average_sight_reading_score"].round(2)
 
-            df["average_sight_reading_score"] = (
-                df["sight_reading_score_1"]
-                + df["sight_reading_score_2"]
-                + df["sight_reading_score_3"]
-            ) / 3
-            # round
-            df["average_sight_reading_score"] = df["average_sight_reading_score"].round(
-                2
-            )
+        event_group = df.groupby(["gen_event", "contest_date", "concert_judge_1"])
+        # join the scores together
+        df = df.merge(
+            event_group["average_concert_score"].mean(),
+            on=["gen_event", "contest_date", "concert_judge_1"],
+            suffixes=("", "_mean"),
+        )
 
-            event_group = df.groupby(["gen_event", "contest_date", "concert_judge_1"])
-            # join the scores together
-            df = df.merge(
-                event_group["average_concert_score"].mean(),
-                on=["gen_event", "contest_date", "concert_judge_1"],
-                suffixes=("", "_mean"),
-            )
-            # rename new column
-            df = df.rename(
-                columns={"average_concert_score_mean": "contest_average_concert_score"}
-            )
+        # rename new column
+        df = df.rename(
+            columns={"average_concert_score_mean": "contest_average_concert_score"}
+        )
 
-            return df
+        return df
 
-        df = adjust_results_df(df)
+    df = adjust_results_df(df)
 
     # only df where concert score is not 0
 
@@ -207,30 +205,28 @@ def add_average_score(pml, df):
     average_scores_2 = df.groupby("code_2")["concert_final_score"].sum()
     average_scores_3 = df.groupby("code_3")["concert_final_score"].sum()
 
-    if "delta_score" not in df.columns:
-        df["delta_score"] = (
-            -df["average_concert_score"] + df["contest_average_concert_score"]
-        )
+    df["delta_score"] = (
+        -df["average_concert_score"] + df["contest_average_concert_score"]
+    )
 
-        # if the delta score is nan then set it to 0
-        df["delta_score"] = df["delta_score"].fillna(0)
+    # if the delta score is nan then set it to 0
+    df["delta_score"] = df["delta_score"].fillna(0)
 
     delta_score_1 = df.groupby("code_1")["delta_score"].sum()
     delta_score_2 = df.groupby("code_2")["delta_score"].sum()
     delta_score_3 = df.groupby("code_3")["delta_score"].sum()
 
-    if "average_concert_score" not in pml.columns:
-        pml["average_concert_score"] = 0
+    pml["average_concert_score"] = 0
     pml.loc[pml["performance_count"] > 0, "average_concert_score"] = (
-        pml.loc[pml["performance_count"] > 0, "code"].map(average_scores_1)
-        + pml.loc[pml["performance_count"] > 0, "code"].map(average_scores_2)
-        + pml.loc[pml["performance_count"] > 0, "code"].map(average_scores_3)
+        pml.loc[pml["performance_count"] > 0, "code"].map(average_scores_1).fillna(0)
+        + pml.loc[pml["performance_count"] > 0, "code"].map(average_scores_2).fillna(0)
+        + pml.loc[pml["performance_count"] > 0, "code"].map(average_scores_3).fillna(0)
     )
 
     pml.loc[pml["performance_count"] > 0, "delta_score"] = (
-        pml.loc[pml["performance_count"] > 0, "code"].map(delta_score_1)
-        + pml.loc[pml["performance_count"] > 0, "code"].map(delta_score_2)
-        + pml.loc[pml["performance_count"] > 0, "code"].map(delta_score_3)
+        pml.loc[pml["performance_count"] > 0, "code"].map(delta_score_1).fillna(0)
+        + pml.loc[pml["performance_count"] > 0, "code"].map(delta_score_2).fillna(0)
+        + pml.loc[pml["performance_count"] > 0, "code"].map(delta_score_3).fillna(0)
     )
 
     # divide delta by performance count
@@ -288,9 +284,9 @@ def add_average_score(pml, df):
     average_scores_2 = df.groupby("code_2")["sight_reading_final_score"].sum()
     average_scores_3 = df.groupby("code_3")["sight_reading_final_score"].sum()
     pml["average_sight_reading_score"] = (
-        pml["code"].map(average_scores_1)
-        + pml["code"].map(average_scores_2)
-        + pml["code"].map(average_scores_3)
+        pml["code"].map(average_scores_1).fillna(0)
+        + pml["code"].map(average_scores_2).fillna(0)
+        + pml["code"].map(average_scores_3).fillna(0)
     )
     pml.loc[pml["performance_count"] > 0, "average_sight_reading_score"] = (
         pml.loc[pml["performance_count"] > 0, "average_sight_reading_score"]
