@@ -99,7 +99,7 @@ def get_db(df):
 
 
 @st.cache_data(ttl=600)
-def clean_data():
+def get_data():
 
     results_df, pml_df = collect_dbs()
 
@@ -252,7 +252,7 @@ def main():
 
     st.page_link("pages/about.py", label="About the dashboard")
 
-    results_df, pml_df = clean_data()
+    results_df, pml_df = get_data()
 
     tab1, tab2 = st.tabs(["C&SR Results", "PML"])
 
@@ -368,7 +368,7 @@ def main():
                 ]
 
             # format year
-            filter_df["year"] = filter_df["year"].astype(str)
+            filter_df["year"] = filter_df["year"].astype(int)
             filter_df = filter_df[
                 [
                     "year",
@@ -393,7 +393,13 @@ def main():
 
             # hide index
 
-            st.dataframe(shown_df, hide_index=True)
+            st.dataframe(
+                shown_df,
+                hide_index=True,
+                column_config={
+                    "Year": st.column_config.NumberColumn(format="%.0f"),
+                },
+            )
 
             # write len
             st.write("Number of rows:", len(filter_df))
@@ -403,6 +409,9 @@ def main():
             scores_over_time_c = (
                 filter_df.groupby("year")["concert_final_score"].mean().sort_index()
             )
+
+            print(filter_df.groupby("year")["concert_final_score"].mean().sort_index())
+
             scores_over_time_c2 = (
                 results_df[results_df["gen_event"].str.contains(event_select)]
                 .groupby("year")["concert_final_score"]
@@ -413,14 +422,14 @@ def main():
             line_chart_c = go.Figure(
                 data=[
                     go.Scatter(
-                        x=list(range(year_select[0], year_select[1] + 1)),
+                        x=scores_over_time_c.index,  # Use the index of the series
                         y=scores_over_time_c.values,
                         mode="lines",
                         name="Selected Results",
                         line=dict(color="#FF4B4B", width=2),
                     ),
                     go.Scatter(
-                        x=list(range(year_select[0], year_select[1] + 1)),
+                        x=scores_over_time_c2.index,  # Use the index of the series
                         y=scores_over_time_c2.values,
                         mode="lines",
                         name="All Results",
@@ -462,14 +471,14 @@ def main():
             line_chart_sr = py.graph_objs.Figure(
                 data=[
                     py.graph_objs.Scatter(
-                        x=list(range(year_select[0], year_select[1] + 1)),
+                        x=scores_over_time_sr.index,
                         y=scores_over_time_sr.values,
                         mode="lines",
                         name="Selected Results",
                         line=dict(color="#FF4B4B", width=2),
                     ),
                     py.graph_objs.Scatter(
-                        x=list(range(year_select[0], year_select[1] + 1)),
+                        x=scores_over_time_sr2.index,
                         y=scores_over_time_sr2.values,
                         mode="lines",
                         name="All Results",
@@ -646,50 +655,51 @@ def main():
 
         else:
 
-            max_x = graphed_pml[
-                graphed_pml["performance_count"] > min_performance_count
-            ]["average_concert_score"].max()
-            max_y = graphed_pml[
-                graphed_pml["performance_count"] > min_performance_count
-            ]["average_sight_reading_score"].max()
+            if selected_row.empty:
+                max_x = graphed_pml[
+                    graphed_pml["performance_count"] > min_performance_count
+                ]["average_concert_score"].max()
+                max_y = graphed_pml[
+                    graphed_pml["performance_count"] > min_performance_count
+                ]["average_sight_reading_score"].max()
 
-            bubble_chart_altair = (
-                alt.Chart(
-                    graphed_pml[
-                        graphed_pml["performance_count"] > min_performance_count
-                    ]
+                bubble_chart_altair = (
+                    alt.Chart(
+                        graphed_pml[
+                            graphed_pml["performance_count"] > min_performance_count
+                        ]
+                    )
+                    .mark_circle()
+                    .encode(
+                        x=alt.X(
+                            "average_concert_score",
+                            scale=alt.Scale(type="log", domain=(1, max_x)),
+                        ),
+                        y=alt.Y(
+                            "average_sight_reading_score",
+                            scale=alt.Scale(type="log", domain=(1, max_y)),
+                        ),
+                        color=alt.Color("event_name", legend=None),
+                        size=alt.Size(
+                            "performance_count",
+                            legend=None,
+                            scale=alt.Scale(range=[2, 3000]),
+                        ),
+                        tooltip=[
+                            "title",
+                            "composer",
+                            "event_name",
+                            "average_concert_score",
+                            "average_sight_reading_score",
+                        ],
+                    )
+                    .interactive()
                 )
-                .mark_circle()
-                .encode(
-                    x=alt.X(
-                        "average_concert_score",
-                        scale=alt.Scale(type="log", domain=(1, max_x)),
-                    ),
-                    y=alt.Y(
-                        "average_sight_reading_score",
-                        scale=alt.Scale(type="log", domain=(1, max_y)),
-                    ),
-                    color=alt.Color("event_name", legend=None),
-                    size=alt.Size(
-                        "performance_count",
-                        legend=None,
-                        scale=alt.Scale(range=[2, 3000]),
-                    ),
-                    tooltip=[
-                        "title",
-                        "composer",
-                        "event_name",
-                        "average_concert_score",
-                        "average_sight_reading_score",
-                    ],
-                )
-                .interactive()
-            )
 
-            st.altair_chart(
-                bubble_chart_altair,
-                use_container_width=True,
-            )
+                st.altair_chart(
+                    bubble_chart_altair,
+                    use_container_width=True,
+                )
 
         if not selected_row.empty and selected_row["performance_count"].iloc[0] != 0:
             selected_code = str(selected_row["code"].values[0])
@@ -699,7 +709,7 @@ def main():
             earliest_year = int(full_title_info["earliest_year"].values[0])
             grade = int(full_title_info["grade"].values[0])
 
-            st.write(f"Data from {remaining_title} by {remaining_composer}")
+            st.write(f"Data for {remaining_title} by {remaining_composer}")
 
             # graph how many times it has been performed compared to all other songs in the event
             remaining_perf_count = selected_row["performance_count"].values[0]
@@ -816,28 +826,6 @@ def main():
                 autorange=False,
             )
 
-            # Display the combined chart
-            st.plotly_chart(fig, key="combined_chart_pml")
-
-            # # Create the line chart with the updated DataFrame
-            # line_chart_count = px.line(
-            #     song_performances_count,
-            #     x="year",
-            #     y="count",
-            #     title=f"Performances for {remaining_title}",
-            # ).update_layout(showlegend=False)
-
-            # line_chart_score = px.line(
-            #     song_performances.groupby("year")["concert_final_score"]
-            #     .mean()
-            #     .sort_index(),
-            #     title=f"Avg. Concert Scores for {remaining_title}",
-            # ).update_layout(showlegend=False)
-
-            # line_chart_score.update_yaxes(autorange="reversed")
-
-            # st.plotly_chart(line_chart_count, key="line_chart_count_pml")
-            # st.plotly_chart(line_chart_score, key="line_chart_score_pml")
             song_performances.columns = song_performances.columns.str.replace(
                 "_", " "
             ).str.title()
@@ -873,6 +861,9 @@ def main():
                 hide_index=True,
             )
 
+            # Display the combined chart
+            st.plotly_chart(fig, key="combined_chart_pml")
+
             all_perf_count = all_perf_df.shape[0]
 
             # make a pie chart
@@ -886,6 +877,7 @@ def main():
                     f"All Other Songs in category since {earliest_year}",
                 ],
                 title=f"Share of {event_name_select} grade {grade} performances",
+                color_discrete_sequence=["#184883", "#FF4B4B"],
             )
 
             # Update the layout to anchor the legend at the bottom
