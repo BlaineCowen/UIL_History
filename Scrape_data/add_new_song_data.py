@@ -1,3 +1,13 @@
+import os
+import sys
+
+# Add the parent directory (UIL_History) to sys.path
+# This allows relative imports to work when running this script directly
+current_dir = os.path.dirname(os.path.abspath(__file__)) # scrape_data directory
+parent_dir = os.path.dirname(current_dir) # UIL_History directory
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 from numpy.lib.arraysetops import unique
 import pandas as pd
 import numpy as np
@@ -386,12 +396,13 @@ def main():
     uil_data = pd.read_sql("SELECT * FROM results", conn)
 
     # add composer_last and composer_no_hyphen columns
-    for i in range(1, 4):
-        uil_data[f"composer_last_{i}"] = ""
-        uil_data[f"composer_no_hyphen_{i}"] = ""
+    # This section was problematic as it tried to add columns and then replace the table.
+    # The add_concat_to_results function should be responsible for necessary column transformations in uil_data.
+    # for i in range(1, 4):
+    #     uil_data[f"composer_last_{i}"] = ""
+    #     uil_data[f"composer_no_hyphen_{i}"] = ""
 
-    # save db
-    uil_data.to_sql("results", conn, if_exists="replace", index=False)
+    # REMOVED: uil_data.to_sql("results", conn, if_exists="replace", index=False)
 
     try:
         uil_data = pd.read_sql(
@@ -426,15 +437,19 @@ def main():
 
     conn = sqlite3.connect("uil.db")
 
-    pml = pd.read_csv("pml.csv")
+    # Load PML from the database, not pml.csv
+    pml = pd.read_sql("SELECT * FROM pml", conn)
 
-    pml = fix_pml(pml)
+    # REMOVED: pml = fix_pml(pml) # Premature call to fix_pml removed
 
-    pml = adjust_pml(pml)
+    pml = adjust_pml(pml) # adjust_pml is kept for preparing PML for matching logic
 
     pml.fillna("", inplace=True)
 
     # replace pml in db
+    # This line updates the pml table with the version processed by adjust_pml.
+    # If adjust_pml makes necessary changes for this script to function, this is okay.
+    # However, this means any changes by fix_pml (run later) would be on this version.
     pml.to_sql("pml", conn, if_exists="replace", index=False)
 
     # create unique_entries table if not exists

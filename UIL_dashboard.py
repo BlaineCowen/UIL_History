@@ -35,19 +35,25 @@ def get_db(df):
     def fix_date(date):
         try:
             if isinstance(date, pd.Timestamp):
-                new_date = date.strftime("%Y-%m-%d")
+                # Already a datetime object, just return it
+                return date 
             else:
-                new_date = date.split(" ")[0]
+                # Handle strings: take date part if time exists
+                date_str = str(date).split(" ")[0]
+                # Basic check for expected formats before coercion
+                if re.match(r'\d{4}-\d{2}-\d{2}', date_str) or re.match(r'\d{2}/\d{2}/\d{4}', date_str):
+                    return date_str # Pass valid-looking strings to pd.to_datetime
+                else:
+                    return None # Invalid format
         except Exception as e:
-            # Log the error or handle it as needed
-            print(f"Error processing date: {date}, Error: {e}")
-            new_date = date  # Return the original date if an error occurs
-        return new_date
+            print(f"Error processing date in fix_date: {date}, Error: {e}")
+            return None
 
+    # Apply fix_date, which now returns strings or Timestamps or None
     df["contest_date"] = df["contest_date"].apply(fix_date)
-    df["contest_date"] = pd.to_datetime(
-        df["contest_date"], format="%Y-%m-%d", errors="coerce"
-    )
+    # Coerce to datetime, letting pandas infer the format for valid strings/Timestamps
+    # Invalid formats from fix_date (None) will become NaT
+    df["contest_date"] = pd.to_datetime(df["contest_date"], errors="coerce")
 
     df["year"] = df["contest_date"].dt.year
     df = df.dropna(subset=["year"])
@@ -250,6 +256,8 @@ def main():
         "Welcome to the UIL Dashboard. This dashboard is designed to help track UIL Concert and Sight Reading results from the state of Texas."
     )
 
+    st.write("Updated for 2025 performances", key="update_2025")
+
     st.page_link("pages/about.py", label="About the dashboard")
 
     results_df, pml_df = get_data()
@@ -348,7 +356,7 @@ def main():
 
             #     filter_df = filter_df[filter_df["Director_search"].str.contains(director_select, na=False)]
 
-            year_select = st.slider("Year Range", 2005, 2024, (2005, 2024))
+            year_select = st.slider("Year Range", 2005, 2025, (2005, 2025))
 
             if year_select:
                 filter_df = filter_df[
