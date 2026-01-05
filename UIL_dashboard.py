@@ -12,12 +12,25 @@ import plotly.graph_objs as go
 @st.cache_resource
 def collect_dbs():
     # Create a SQLite connection
-    conn = sqlite3.connect("uil.db")
-    results_df = pd.read_sql_query("SELECT * FROM results", conn)
-    pml_df = pd.read_sql_query("SELECT * FROM pml", conn)
-    conn.close()
-
-    return results_df, pml_df
+    try:
+        conn = sqlite3.connect("uil.db")
+        results_df = pd.read_sql_query("SELECT * FROM results", conn)
+        pml_df = pd.read_sql_query("SELECT * FROM pml", conn)
+        conn.close()
+        
+        # Check if dataframes are empty
+        if results_df.empty:
+            st.error("Results table is empty. Please check your database.")
+        if pml_df.empty:
+            st.warning("PML table is empty.")
+            
+        return results_df, pml_df
+    except sqlite3.Error as e:
+        st.error(f"Database error: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error loading database: {e}")
+        return pd.DataFrame(), pd.DataFrame()
 
 
 def get_db(df):
@@ -277,7 +290,16 @@ def main():
         )
 
         if event_select:
+            # Check if gen_event column exists
+            if "gen_event" not in filter_df.columns:
+                st.error("Missing 'gen_event' column in data. Please check your database.")
+                return
             filter_df = filter_df[filter_df["gen_event"] == event_select]
+            
+            # Check if filter resulted in empty dataframe
+            if filter_df.empty:
+                st.warning("No data matches the selected event.")
+                return
 
             if event_select == "Chorus":
                 # create new to select sub events
@@ -364,34 +386,46 @@ def main():
                 ]
 
             if song_name_input or composer_name_input:
-                # only show rows where song name is in song_concat
-                filter_df = results_df[
-                    results_df["song_concat"].str.contains(song_name_input, na=False)
-                ]
-                # only show rows where composer name is in composer_concat
-                filter_df = filter_df[
-                    filter_df["composer_concat"].str.contains(
-                        composer_name_input, na=False
-                    )
-                ]
+                # Filter the current filter_df, don't reset to results_df
+                if song_name_input:
+                    filter_df = filter_df[
+                        filter_df["song_concat"].str.contains(song_name_input, na=False)
+                    ]
+                if composer_name_input:
+                    filter_df = filter_df[
+                        filter_df["composer_concat"].str.contains(
+                            composer_name_input, na=False
+                        )
+                    ]
 
+            # Check if filter_df is empty before proceeding
+            if filter_df.empty:
+                st.warning("No data matches your filters. Please adjust your selections.")
+                return
+            
             # format year
             filter_df["year"] = filter_df["year"].astype(int)
-            filter_df = filter_df[
-                [
-                    "year",
-                    "event",
-                    "school",
-                    "director",
-                    "additional_director",
-                    "classification",
-                    "choice_1",
-                    "choice_2",
-                    "choice_3",
-                    "concert_final_score",
-                    "sight_reading_final_score",
-                ]
+            
+            # Check required columns exist before selection
+            required_cols = [
+                "year",
+                "event",
+                "school",
+                "director",
+                "additional_director",
+                "classification",
+                "choice_1",
+                "choice_2",
+                "choice_3",
+                "concert_final_score",
+                "sight_reading_final_score",
             ]
+            missing_cols = [col for col in required_cols if col not in filter_df.columns]
+            if missing_cols:
+                st.error(f"Missing required columns: {missing_cols}")
+                return
+                
+            filter_df = filter_df[required_cols]
 
             # shown_df = filter df with proper case and no underscores
             shown_df = filter_df.copy()
@@ -420,31 +454,45 @@ def main():
 
             print(filter_df.groupby("year")["concert_final_score"].mean().sort_index())
 
-            scores_over_time_c2 = (
-                results_df[results_df["gen_event"].str.contains(event_select)]
-                .groupby("year")["concert_final_score"]
-                .mean()
-                .sort_index()
-            )
+            # Check if gen_event column exists before filtering
+            if "gen_event" in results_df.columns:
+                scores_over_time_c2 = (
+                    results_df[results_df["gen_event"].str.contains(event_select)]
+                    .groupby("year")["concert_final_score"]
+                    .mean()
+                    .sort_index()
+                )
+            else:
+                scores_over_time_c2 = pd.Series(dtype=float)
 
-            line_chart_c = go.Figure(
-                data=[
+            # Build chart data safely
+            chart_data = []
+            if len(scores_over_time_c) > 0:
+                chart_data.append(
                     go.Scatter(
-                        x=scores_over_time_c.index,  # Use the index of the series
+                        x=scores_over_time_c.index,
                         y=scores_over_time_c.values,
                         mode="lines",
                         name="Selected Results",
                         line=dict(color="#FF4B4B", width=2),
-                    ),
+                    )
+                )
+            if len(scores_over_time_c2) > 0:
+                chart_data.append(
                     go.Scatter(
-                        x=scores_over_time_c2.index,  # Use the index of the series
+                        x=scores_over_time_c2.index,
                         y=scores_over_time_c2.values,
                         mode="lines",
                         name="All Results",
                         line=dict(color="#184883", width=2),
-                    ),
-                ]
-            )
+                    )
+                )
+            
+            if not chart_data:
+                st.warning("No data available for chart.")
+                return
+                
+            line_chart_c = go.Figure(data=chart_data)
 
             line_chart_c.update_yaxes(autorange="reversed")
 
@@ -469,31 +517,45 @@ def main():
                 "sight_reading_final_score"
             ].mean()
 
-            scores_over_time_sr2 = (
-                results_df[results_df["gen_event"].str.contains(event_select)]
-                .groupby("year")["sight_reading_final_score"]
-                .mean()
-                .sort_index()
-            )
+            # Check if gen_event column exists before filtering
+            if "gen_event" in results_df.columns:
+                scores_over_time_sr2 = (
+                    results_df[results_df["gen_event"].str.contains(event_select)]
+                    .groupby("year")["sight_reading_final_score"]
+                    .mean()
+                    .sort_index()
+                )
+            else:
+                scores_over_time_sr2 = pd.Series(dtype=float)
 
-            line_chart_sr = py.graph_objs.Figure(
-                data=[
+            # Build chart data safely
+            chart_data_sr = []
+            if len(scores_over_time_sr) > 0:
+                chart_data_sr.append(
                     py.graph_objs.Scatter(
                         x=scores_over_time_sr.index,
                         y=scores_over_time_sr.values,
                         mode="lines",
                         name="Selected Results",
                         line=dict(color="#FF4B4B", width=2),
-                    ),
+                    )
+                )
+            if len(scores_over_time_sr2) > 0:
+                chart_data_sr.append(
                     py.graph_objs.Scatter(
                         x=scores_over_time_sr2.index,
                         y=scores_over_time_sr2.values,
                         mode="lines",
                         name="All Results",
                         line=dict(color="#184883", width=2),
-                    ),
-                ],
-            )
+                    )
+                )
+            
+            if not chart_data_sr:
+                st.warning("No data available for chart.")
+                return
+                
+            line_chart_sr = py.graph_objs.Figure(data=chart_data_sr)
 
             line_chart_sr.update_yaxes(autorange="reversed")
 
@@ -515,29 +577,35 @@ def main():
             # create a pie chart of the concert scores
             st.write("Concert Scores")
             concert_scores = filter_df["concert_final_score"].value_counts()
-            pie_chart_c = py.graph_objs.Figure(
-                data=[
-                    py.graph_objs.Pie(
-                        labels=concert_scores.index,
-                        values=concert_scores.values,
-                        hole=0.5,
-                    )
-                ]
-            )
-            st.plotly_chart(pie_chart_c, key="pie_chart_c")
+            if len(concert_scores) > 0:
+                pie_chart_c = py.graph_objs.Figure(
+                    data=[
+                        py.graph_objs.Pie(
+                            labels=concert_scores.index,
+                            values=concert_scores.values,
+                            hole=0.5,
+                        )
+                    ]
+                )
+                st.plotly_chart(pie_chart_c, key="pie_chart_c")
+            else:
+                st.warning("No concert score data available.")
 
             sight_reading_scores = filter_df["sight_reading_final_score"].value_counts()
             st.write("Sight Reading Scores")
-            pie_chart_SR = py.graph_objs.Figure(
-                data=[
-                    py.graph_objs.Pie(
-                        labels=sight_reading_scores.index,
-                        values=sight_reading_scores.values,
-                        hole=0.5,
-                    )
-                ]
-            )
-            st.plotly_chart(pie_chart_SR, key="pie_chart_SRresults")
+            if len(sight_reading_scores) > 0:
+                pie_chart_SR = py.graph_objs.Figure(
+                    data=[
+                        py.graph_objs.Pie(
+                            labels=sight_reading_scores.index,
+                            values=sight_reading_scores.values,
+                            hole=0.5,
+                        )
+                    ]
+                )
+                st.plotly_chart(pie_chart_SR, key="pie_chart_SRresults")
+            else:
+                st.warning("No sight reading score data available.")
 
         # # write len
         # st.write("Number of rows:", len(df))
@@ -608,22 +676,26 @@ def main():
                 filtered_pml["performance_count"] >= min_performance_count
             ]
 
-        # only keep columns
-        display_pml = filtered_pml[
-            [
-                "grade",
-                "event_name",
-                "title",
-                "composer",
-                "arranger",
-                "code",
-                "performance_count",
-                "average_concert_score",
-                "average_sight_reading_score",
-                "song_score",
-                "specification",
-            ]
+        # only keep columns - check they exist first
+        required_pml_cols = [
+            "grade",
+            "event_name",
+            "title",
+            "composer",
+            "arranger",
+            "code",
+            "performance_count",
+            "average_concert_score",
+            "average_sight_reading_score",
+            "song_score",
+            "specification",
         ]
+        missing_pml_cols = [col for col in required_pml_cols if col not in filtered_pml.columns]
+        if missing_pml_cols:
+            st.error(f"Missing required PML columns: {missing_pml_cols}")
+            return
+        
+        display_pml = filtered_pml[required_pml_cols]
 
         display_pml = display_pml.sort_values(by="code")
 
@@ -644,8 +716,16 @@ def main():
             hide_index=True,
         )
 
-        if pml_write:
-            selected_row = display_pml.iloc[pml_write.selection["rows"]]
+        # Initialize selected_row to avoid undefined variable errors
+        selected_row = pd.DataFrame()
+        
+        if pml_write and hasattr(pml_write, 'selection') and pml_write.selection:
+            try:
+                rows = pml_write.selection.get("rows", [])
+                if rows and len(rows) > 0:
+                    selected_row = display_pml.iloc[rows]
+            except (IndexError, KeyError, AttributeError):
+                selected_row = pd.DataFrame()
 
         graphed_pml = filtered_pml[
             # no nan values
@@ -664,12 +744,21 @@ def main():
         else:
 
             if selected_row.empty:
-                max_x = graphed_pml[
+                graphed_subset = graphed_pml[
                     graphed_pml["performance_count"] > min_performance_count
-                ]["average_concert_score"].max()
-                max_y = graphed_pml[
-                    graphed_pml["performance_count"] > min_performance_count
-                ]["average_sight_reading_score"].max()
+                ]
+                # Safe max() calls - check if dataframe is empty
+                if graphed_subset.empty:
+                    max_x = 1
+                    max_y = 1
+                else:
+                    max_x = graphed_subset["average_concert_score"].max()
+                    max_y = graphed_subset["average_sight_reading_score"].max()
+                    # Ensure max values are valid
+                    if pd.isna(max_x) or max_x <= 0:
+                        max_x = 1
+                    if pd.isna(max_y) or max_y <= 0:
+                        max_y = 1
 
                 bubble_chart_altair = (
                     alt.Chart(
@@ -709,13 +798,30 @@ def main():
                     use_container_width=True,
                 )
 
-        if not selected_row.empty and selected_row["performance_count"].iloc[0] != 0:
-            selected_code = str(selected_row["code"].values[0])
-            full_title_info = pml_df[pml_df["code"] == selected_code]
-            remaining_composer = full_title_info["composer"].values[0]
-            remaining_title = full_title_info["title"].values[0]
-            earliest_year = int(full_title_info["earliest_year"].values[0])
-            grade = int(full_title_info["grade"].values[0])
+        if not selected_row.empty and len(selected_row) > 0:
+            try:
+                # Check if performance_count exists and is not zero
+                if "performance_count" not in selected_row.columns:
+                    return
+                if selected_row["performance_count"].iloc[0] == 0:
+                    return
+                    
+                selected_code = str(selected_row["code"].values[0])
+                full_title_info = pml_df[pml_df["code"] == selected_code]
+                
+                # Check if code was found
+                if full_title_info.empty:
+                    st.warning(f"Code {selected_code} not found in database.")
+                    return
+                
+                # Safe access to values
+                remaining_composer = full_title_info["composer"].values[0]
+                remaining_title = full_title_info["title"].values[0]
+                earliest_year = int(full_title_info["earliest_year"].values[0])
+                grade = int(full_title_info["grade"].values[0])
+            except (IndexError, KeyError, ValueError) as e:
+                st.error(f"Error accessing selected row data: {e}")
+                return
 
             st.write(f"Data for {remaining_title} by {remaining_composer}")
 
@@ -825,7 +931,13 @@ def main():
             fig.update_yaxes(
                 title_text="Performance Count", secondary_y=False, showgrid=False
             )
-            min_value = song_performances_avg_score.max()
+            # Safe max() call - check if series is empty
+            if len(song_performances_avg_score) > 0:
+                min_value = song_performances_avg_score.max()
+                if pd.isna(min_value):
+                    min_value = 1
+            else:
+                min_value = 1
             fig.update_xaxes(showgrid=False)  # Disable gridlines across x-axis
             fig.update_yaxes(
                 title_text="Avg. Concert Score",
