@@ -256,7 +256,7 @@ def main():
         "Welcome to the UIL Dashboard. This dashboard is designed to help track UIL Concert and Sight Reading results from the state of Texas."
     )
 
-    st.write("Updated for 2025 performances", key="update_2025")
+    st.write("Updated for 2025 performances")
 
     st.page_link("pages/about.py", label="About the dashboard")
 
