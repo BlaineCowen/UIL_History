@@ -8,3 +8,4 @@ secrets.toml
 *.db
 !uil.db
 .venv
+.next
