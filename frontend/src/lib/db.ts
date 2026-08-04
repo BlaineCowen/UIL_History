@@ -24,9 +24,20 @@ declare global {
 
 function connect() {
   const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set");
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is not set. On Vercel, add it to the project's " +
+        "Environment Variables; use Supabase's pooler string (port 6543).",
+    );
+  }
   return postgres(url, {
-    max: 5,
+    /**
+     * Small on purpose. This pool is per serverless instance, and Vercel runs
+     * many of them, so the ceiling that matters is instances x max against the
+     * pooler's client limit -- not throughput within one instance. Reads are
+     * cached anyway, so most invocations never open a connection at all.
+     */
+    max: Number(process.env.DATABASE_POOL_MAX ?? 3),
     idle_timeout: 20,
     // Required for transaction-mode poolers (Supabase's port 6543). Named
     // prepared statements do not survive a pooler handing you a new session.

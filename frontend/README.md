@@ -49,6 +49,30 @@ DATABASE_URL=postgres://uil:uil@localhost:55432/uil npm run dev
 DATABASE_URL=... npm run build && DATABASE_URL=... npm run start
 ```
 
+## Deploying to Vercel
+
+The repository holds **two** applications: the original Streamlit app at the
+root, and this one in `frontend/`. They do not conflict, and neither needs to
+move.
+
+1. **Root Directory: `frontend`** in the Vercel project settings. This is the
+   whole trick — Vercel builds only this directory and ignores the Python at
+   the root.
+2. **Environment variable `DATABASE_URL`** — Supabase's *pooler* string, port
+   `6543`. The direct `5432` connection will exhaust connections under
+   serverless. See `.env.example`.
+3. **Production branch**: whichever branch carries `frontend/`. Note that
+   `master` is the real trunk here; `main` is an unrelated single commit from
+   2022 and is not used.
+
+The build does not need a database — every data route is dynamic, so nothing
+queries Postgres at build time. A missing `DATABASE_URL` therefore fails at
+request time rather than build time.
+
+`better-sqlite3` is a devDependency (the loader uses it) and Vercel installs
+devDependencies during builds. It ships prebuilds, so it should install without
+compiling; if a build ever fails on it, that is the thing to look at.
+
 ## Routes
 
 | Route | What it does |
