@@ -43,6 +43,11 @@ export type EntryFilters = {
   composer?: string;
   yearFrom?: number;
   yearTo?: number;
+  /**
+   * Only ever set by the unlisted /blaine route -- parseEntryFilters ignores
+   * the URL parameter unless explicitly asked for it.
+   */
+  director?: string;
 };
 
 export type Entry = {
@@ -69,6 +74,20 @@ export type Entry = {
   code_1: string;
   code_2: string;
   code_3: string;
+};
+
+/**
+ * An entry plus the three individual panel scores per discipline. The stored
+ * final is the median of its three judges on all but 25 rows, so keep showing
+ * the stored value rather than recomputing it.
+ */
+export type EntryWithJudges = Entry & {
+  concert_score_1: number;
+  concert_score_2: number;
+  concert_score_3: number;
+  sight_reading_score_1: number;
+  sight_reading_score_2: number;
+  sight_reading_score_3: number;
 };
 
 export type Song = {
@@ -139,6 +158,16 @@ function buildWhere(f: EntryFilters): Where {
   if (f.yearTo !== undefined) {
     clauses.push("year <= ?");
     params.push(f.yearTo);
+  }
+  if (f.director) {
+    // Both fields: 55,730 rows name an additional director, and someone listed
+    // there was still on the podium. There is no normalized director_search
+    // column and no index, but an unindexed scan of this table costs ~18ms.
+    clauses.push(
+      "(director LIKE ? COLLATE NOCASE OR additional_director LIKE ? COLLATE NOCASE)",
+    );
+    const term = `%${f.director.trim()}%`;
+    params.push(term, term);
   }
 
   return {
@@ -236,6 +265,38 @@ const ENTRY_ORDER: Record<EntrySort, string> = {
   sight_reading_final_score: "sight_reading_final_score",
 };
 
+const ENTRY_SELECT = `entry_number, year, contest_date, event, gen_event, school, city,
+       conference, classification, school_level, director, additional_director,
+       concert_final_score, sight_reading_final_score,
+       title_1, title_2, title_3, composer_1, composer_2, composer_3,
+       code_1, code_2, code_3`;
+
+/** The individual panel scores. Only the unlisted /blaine route selects these. */
+const JUDGE_SELECT = `concert_score_1, concert_score_2, concert_score_3,
+       sight_reading_score_1, sight_reading_score_2, sight_reading_score_3`;
+
+function entriesQuery(
+  columns: string,
+  f: EntryFilters,
+  sort: EntrySort,
+  dir: "asc" | "desc",
+  limit: number,
+  offset: number,
+) {
+  const { sql, params } = buildWhere(f);
+  // Both sides come from the whitelisting EntrySort type, not user input.
+  const order = `${ENTRY_ORDER[sort]} ${dir === "asc" ? "ASC" : "DESC"}`;
+  return getDb()
+    .prepare(
+      `SELECT ${columns}
+       FROM entries ${sql}
+       ORDER BY ${order} NULLS LAST, year DESC, ${ENTRY_ORDER.school} ASC,
+                entry_number ASC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(...params, limit, offset);
+}
+
 export function getEntries(
   f: EntryFilters,
   sort: EntrySort,
@@ -243,22 +304,24 @@ export function getEntries(
   limit: number,
   offset: number,
 ): Entry[] {
-  const { sql, params } = buildWhere(f);
-  // Both sides come from the whitelisting EntrySort type, not user input.
-  const order = `${ENTRY_ORDER[sort]} ${dir === "asc" ? "ASC" : "DESC"}`;
-  return getDb()
-    .prepare(
-      `SELECT entry_number, year, contest_date, event, gen_event, school, city,
-              conference, classification, school_level, director, additional_director,
-              concert_final_score, sight_reading_final_score,
-              title_1, title_2, title_3, composer_1, composer_2, composer_3,
-              code_1, code_2, code_3
-       FROM entries ${sql}
-       ORDER BY ${order} NULLS LAST, year DESC, ${ENTRY_ORDER.school} ASC,
-                entry_number ASC
-       LIMIT ? OFFSET ?`,
-    )
-    .all(...params, limit, offset) as Entry[];
+  return entriesQuery(ENTRY_SELECT, f, sort, dir, limit, offset) as Entry[];
+}
+
+export function getEntriesWithJudges(
+  f: EntryFilters,
+  sort: EntrySort,
+  dir: "asc" | "desc",
+  limit: number,
+  offset: number,
+): EntryWithJudges[] {
+  return entriesQuery(
+    `${ENTRY_SELECT}, ${JUDGE_SELECT}`,
+    f,
+    sort,
+    dir,
+    limit,
+    offset,
+  ) as EntryWithJudges[];
 }
 
 export type Summary = {

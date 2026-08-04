@@ -26,7 +26,15 @@ function num(v: string | string[] | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-export function parseEntryFilters(sp: SearchParams): EntryFilters {
+/**
+ * `director` is opt-in: the public route must ignore `?director=` entirely, so
+ * filtering by a person stays on the unlisted /blaine page. Reading it is a
+ * deliberate act by the caller, not a default.
+ */
+export function parseEntryFilters(
+  sp: SearchParams,
+  opts: { director?: boolean } = {},
+): EntryFilters {
   return {
     genEvent: one(sp.event),
     events: many(sp.sub),
@@ -38,6 +46,7 @@ export function parseEntryFilters(sp: SearchParams): EntryFilters {
     composer: one(sp.composer),
     yearFrom: num(sp.from),
     yearTo: num(sp.to),
+    director: opts.director ? one(sp.director) : undefined,
   };
 }
 
@@ -76,6 +85,32 @@ export const ENTRY_SORT_DEFAULT_DIR: Record<EntrySort, "asc" | "desc"> = {
   school: "asc",
   concert_final_score: "asc",
   sight_reading_final_score: "asc",
+};
+
+/** Shared by the public results page and the unlisted /blaine view. */
+export const ENTRY_SORT_COLUMNS: { key: EntrySort; label: string }[] = [
+  { key: "year", label: "Year" },
+  { key: "school", label: "School" },
+  { key: "concert_final_score", label: "Concert" },
+  { key: "sight_reading_final_score", label: "SR" },
+];
+
+export const ENTRY_SORT_LABELS: Record<EntrySort, string> = {
+  year: "year",
+  school: "school",
+  concert_final_score: "concert rating",
+  sight_reading_final_score: "sight-reading rating",
+};
+
+/** Ratings are ranks, so ascending is "best first" -- worth spelling out. */
+export const ENTRY_SORT_DESCRIPTIONS: Record<
+  EntrySort,
+  Record<"asc" | "desc", string>
+> = {
+  year: { asc: "oldest first", desc: "newest first" },
+  school: { asc: "A to Z", desc: "Z to A" },
+  concert_final_score: { asc: "best first", desc: "worst first" },
+  sight_reading_final_score: { asc: "best first", desc: "worst first" },
 };
 
 export function parseEntrySort(sp: SearchParams): {

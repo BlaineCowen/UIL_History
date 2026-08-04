@@ -296,6 +296,40 @@ export function RatingCell({
   );
 }
 
+/**
+ * The three individual panel scores followed by the awarded final, e.g.
+ * "1 1 2 → 1". The final is the stored value, not the median of the three:
+ * they agree on all but 25 of 159,451 rows, and those 25 are data anomalies
+ * rather than a rule worth reimplementing.
+ */
+export function JudgeScores({
+  scores,
+  final,
+}: {
+  scores: (number | null | undefined)[];
+  final: number | null | undefined;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <span className="tnum inline-flex gap-1 text-[12px]">
+        {scores.map((s, i) => (
+          <span
+            key={i}
+            className="w-3 text-center"
+            style={{ color: "var(--ink-2)" }}
+          >
+            {s ?? "—"}
+          </span>
+        ))}
+      </span>
+      <span aria-hidden style={{ color: "var(--muted)" }}>
+        →
+      </span>
+      <ScoreBadge score={final} />
+    </span>
+  );
+}
+
 /** A label/value line inside a DataCard. */
 export function CardRow({
   label,

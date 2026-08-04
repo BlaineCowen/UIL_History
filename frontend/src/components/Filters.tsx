@@ -15,6 +15,8 @@ export type FiltersProps = {
   conferences: Option[];
   classifications: Option[];
   yearBounds: { min: number; max: number };
+  /** Only the unlisted /blaine route passes this. */
+  showDirector?: boolean;
 };
 
 export function Filters(props: FiltersProps) {
@@ -46,6 +48,7 @@ export function Filters(props: FiltersProps) {
     (searchParams.get("school") ? 1 : 0) +
     (searchParams.get("song") ? 1 : 0) +
     (searchParams.get("composer") ? 1 : 0) +
+    (props.showDirector && searchParams.get("director") ? 1 : 0) +
     (from !== props.yearBounds.min || to !== props.yearBounds.max ? 1 : 0);
 
   return (
@@ -153,6 +156,16 @@ export function Filters(props: FiltersProps) {
                 onCommit={(v) => push({ composer: v || undefined })}
               />
             </Field>
+
+            {props.showDirector && (
+              <Field label="Director">
+                <DebouncedInput
+                  placeholder="e.g. Ledford"
+                  value={searchParams.get("director") ?? ""}
+                  onCommit={(v) => push({ director: v || undefined })}
+                />
+              </Field>
+            )}
 
             <Field label="School level">
               <select

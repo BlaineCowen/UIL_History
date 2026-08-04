@@ -1,13 +1,13 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import {
   countEntries,
   getConferences,
-  getDistribution,
-  getEntries,
+  getEntriesWithJudges,
   getFilterOptions,
-  getScoresByYear,
   getSummary,
   getYearBounds,
+  type EntrySort,
 } from "@/lib/db";
 import {
   parseEntryFilters,
@@ -20,24 +20,34 @@ import {
   ENTRY_SORT_LABELS,
   type SearchParams,
 } from "@/lib/params";
-import type { EntrySort } from "@/lib/db";
 import { choice, formatNumber, formatScore, pct } from "@/lib/format";
 import { Filters } from "@/components/Filters";
-import { ScoreTrend } from "@/components/charts/ScoreTrend";
-import { Distribution } from "@/components/charts/Distribution";
 import {
   Card,
+  CardRow,
   DataCard,
   DataList,
   EmptyState,
+  JudgeScores,
   Pagination,
-  RatingCell,
-  ScoreBadge,
   SectionTitle,
   SortChips,
   StatTile,
   TableScroll,
 } from "@/components/ui";
+
+/**
+ * Unlisted companion to the public results page: adds a director filter and
+ * shows each panel's three individual scores instead of only the final.
+ *
+ * "Unlisted" is the whole of the protection -- there is no nav link and no
+ * password, so anyone who types the path can read it. That is deliberate, and
+ * fine behind the tailnet; revisit it before this goes on a public host.
+ */
+export const metadata: Metadata = {
+  title: "Results with judge detail",
+  robots: { index: false, follow: false },
+};
 
 const PAGE_SIZE = 50;
 
@@ -57,18 +67,17 @@ const COLUMNS = [
   "SR",
 ];
 
-export default async function ResultsPage({
+export default async function BlainePage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }) {
   const sp = await searchParams;
-  const filters = parseEntryFilters(sp);
+  const filters = parseEntryFilters(sp, { director: true });
   const { sort, dir } = parseEntrySort(sp);
   const page = parsePage(sp);
   const bounds = getYearBounds();
 
-  /** Re-selecting the active column flips it; a new column starts at its own natural direction. */
   function sortHref(key: EntrySort) {
     const nextDir =
       sort === key
@@ -76,7 +85,7 @@ export default async function ResultsPage({
           ? "desc"
           : "asc"
         : ENTRY_SORT_DEFAULT_DIR[key];
-    return `/${buildQuery(sp, { sort: key, dir: nextDir, page: undefined })}`;
+    return `/blaine${buildQuery(sp, { sort: key, dir: nextDir, page: undefined })}`;
   }
 
   const options = getFilterOptions(filters.genEvent);
@@ -84,11 +93,16 @@ export default async function ResultsPage({
 
   const total = countEntries(filters);
   const summary = getSummary(filters);
-  const rows = getEntries(filters, sort, dir, PAGE_SIZE, (page - 1) * PAGE_SIZE);
+  const rows = getEntriesWithJudges(
+    filters,
+    sort,
+    dir,
+    PAGE_SIZE,
+    (page - 1) * PAGE_SIZE,
+  );
+
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  // The table and the phone card list render the same three selections, so
-  // they are unpacked once here rather than in each view.
   const entries = rows.map((r) => ({
     row: r,
     selections: [
@@ -96,37 +110,37 @@ export default async function ResultsPage({
       { t: r.title_2, c: r.composer_2, code: r.code_2 },
       { t: r.title_3, c: r.composer_3, code: r.code_3 },
     ].filter((s) => (s.t ?? "").trim()),
+    concert: [r.concert_score_1, r.concert_score_2, r.concert_score_3],
+    sight: [
+      r.sight_reading_score_1,
+      r.sight_reading_score_2,
+      r.sight_reading_score_3,
+    ],
   }));
-
-  const selected = getScoresByYear(filters);
-  // The comparison line is the same ensemble with every other filter removed.
-  const baseline = getScoresByYear({ genEvent: filters.genEvent });
-  const distribution = getDistribution(filters);
-
-  const narrowed = Object.entries(filters).some(
-    ([key, value]) =>
-      key !== "genEvent" &&
-      value !== undefined &&
-      !(Array.isArray(value) && value.length === 0) &&
-      !(key === "yearFrom" && value === bounds.min) &&
-      !(key === "yearTo" && value === bounds.max),
-  );
-
-  const baselineLabel = filters.genEvent ? `All ${filters.genEvent}` : "All entries";
 
   return (
     <div className="grid gap-6">
       <header className="grid gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className="rounded-full border px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide"
+            style={{ color: "var(--muted)" }}
+          >
+            Unlisted
+          </span>
+        </div>
         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-          Concert &amp; Sight-Reading results
+          Results with judge detail
         </h1>
         <p className="text-sm max-w-2xl" style={{ color: "var(--ink-2)" }}>
-          Every Texas UIL concert and sight-reading entry from {bounds.min} to{" "}
-          {bounds.max}. Ratings run 1 (superior) to 5 — lower is better throughout.
+          The full results explorer, plus a director filter and every panel&apos;s
+          three individual scores. Ratings run 1 (superior) to 5 — lower is
+          better throughout.
         </p>
       </header>
 
       <Filters
+        showDirector
         genEvents={["Band", "Chorus", "Orchestra"]}
         events={options.events.map((e) => ({
           value: e.event,
@@ -154,7 +168,7 @@ export default async function ResultsPage({
       {total === 0 ? (
         <EmptyState
           title="No entries match these filters"
-          hint="Try widening the year range or clearing the school and song filters."
+          hint="Try a shorter director name, or widen the year range."
         />
       ) : (
         <>
@@ -173,36 +187,14 @@ export default async function ResultsPage({
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <ScoreTrend
-              title="Concert rating over time"
-              hint="Average concert rating by contest year."
-              metric="concert"
-              selected={selected}
-              baseline={baseline}
-              baselineLabel={baselineLabel}
-              showBaseline={narrowed}
-            />
-            <ScoreTrend
-              title="Sight-reading rating over time"
-              hint="Average sight-reading rating by contest year."
-              metric="sight"
-              selected={selected}
-              baseline={baseline}
-              baselineLabel={baselineLabel}
-              showBaseline={narrowed}
-            />
-          </div>
-
-          <Distribution data={distribution} total={total} />
-
           <Card padded={false}>
             <div className="p-4 sm:p-5 pb-0">
               <SectionTitle
                 title="Entries"
                 hint={`${formatNumber(total)} matching · sorted by ${
                   ENTRY_SORT_LABELS[sort]
-                } (${ENTRY_SORT_DESCRIPTIONS[sort][dir]})`}
+                } (${ENTRY_SORT_DESCRIPTIONS[sort][dir]}) · each panel shows its
+                  three judges then the awarded rating`}
               />
               <SortChips
                 columns={ENTRY_SORT_COLUMNS}
@@ -251,91 +243,105 @@ export default async function ResultsPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {entries.map(({ row: r, selections }) => {
-                      return (
-                        <tr key={r.entry_number} className="align-top">
-                          <td className="tnum whitespace-nowrap border-b py-2.5 pr-4">
-                            {r.year}
-                          </td>
-                          <td className="whitespace-nowrap border-b py-2.5 pr-4">
-                            {r.event}
-                          </td>
-                          <td className="border-b py-2.5 pr-4 min-w-[160px]">
-                            <span className="font-medium">{r.school}</span>
-                            {r.conference && (
-                              <span
-                                className="ml-1.5 text-[11px]"
-                                style={{ color: "var(--muted)" }}
-                              >
-                                {r.conference}
-                              </span>
+                    {entries.map(({ row: r, selections, concert, sight }) => (
+                      <tr key={r.entry_number} className="align-top">
+                        <td className="tnum whitespace-nowrap border-b py-2.5 pr-4">
+                          {r.year}
+                        </td>
+                        <td className="whitespace-nowrap border-b py-2.5 pr-4">
+                          {r.event}
+                        </td>
+                        <td className="border-b py-2.5 pr-4 min-w-[160px]">
+                          <span className="font-medium">{r.school}</span>
+                          {r.conference && (
+                            <span
+                              className="ml-1.5 text-[11px]"
+                              style={{ color: "var(--muted)" }}
+                            >
+                              {r.conference}
+                            </span>
+                          )}
+                        </td>
+                        <td
+                          className="border-b py-2.5 pr-4 min-w-[130px]"
+                          style={{ color: "var(--ink-2)" }}
+                        >
+                          {r.director || "—"}
+                          {r.additional_director && (
+                            <div className="text-[11px]" style={{ color: "var(--muted)" }}>
+                              + {r.additional_director}
+                            </div>
+                          )}
+                        </td>
+                        <td
+                          className="whitespace-nowrap border-b py-2.5 pr-4"
+                          style={{ color: "var(--ink-2)" }}
+                        >
+                          {r.classification || "—"}
+                        </td>
+                        <td className="border-b py-2.5 pr-4 min-w-[260px]">
+                          <ul className="grid gap-0.5">
+                            {selections.map((s, i) => (
+                              <li key={i} className="text-[13px]">
+                                {s.code ? (
+                                  <Link
+                                    href={`/pml/${encodeURIComponent(s.code)}`}
+                                    className="underline decoration-transparent hover:decoration-inherit underline-offset-2 transition"
+                                  >
+                                    {choice(s.t, s.c)}
+                                  </Link>
+                                ) : (
+                                  choice(s.t, s.c)
+                                )}
+                              </li>
+                            ))}
+                            {!selections.length && (
+                              <li style={{ color: "var(--muted)" }}>—</li>
                             )}
-                          </td>
-                          <td
-                            className="border-b py-2.5 pr-4 min-w-[130px]"
-                            style={{ color: "var(--ink-2)" }}
-                          >
-                            {r.director || "—"}
-                          </td>
-                          <td
-                            className="whitespace-nowrap border-b py-2.5 pr-4"
-                            style={{ color: "var(--ink-2)" }}
-                          >
-                            {r.classification || "—"}
-                          </td>
-                          <td className="border-b py-2.5 pr-4 min-w-[260px]">
-                            <ul className="grid gap-0.5">
-                              {selections.map((s, i) => (
-                                <li key={i} className="text-[13px]">
-                                  {s.code ? (
-                                    <Link
-                                      href={`/pml/${encodeURIComponent(s.code)}`}
-                                      className="underline decoration-transparent hover:decoration-inherit underline-offset-2 transition"
-                                    >
-                                      {choice(s.t, s.c)}
-                                    </Link>
-                                  ) : (
-                                    choice(s.t, s.c)
-                                  )}
-                                </li>
-                              ))}
-                              {!selections.length && (
-                                <li style={{ color: "var(--muted)" }}>—</li>
-                              )}
-                            </ul>
-                          </td>
-                          <td className="border-b py-2.5 pr-4">
-                            <ScoreBadge score={r.concert_final_score} />
-                          </td>
-                          <td className="border-b py-2.5 pr-2">
-                            <ScoreBadge score={r.sight_reading_final_score} />
-                          </td>
-                        </tr>
-                      );
-                    })}
+                          </ul>
+                        </td>
+                        <td className="border-b py-2.5 pr-4">
+                          <JudgeScores
+                            scores={concert}
+                            final={r.concert_final_score}
+                          />
+                        </td>
+                        <td className="border-b py-2.5 pr-2">
+                          <JudgeScores
+                            scores={sight}
+                            final={r.sight_reading_final_score}
+                          />
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </TableScroll>
 
               <DataList>
-                {entries.map(({ row: r, selections }) => (
+                {entries.map(({ row: r, selections, concert, sight }) => (
                   <DataCard key={r.entry_number}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium leading-snug">{r.school}</p>
-                        <p
-                          className="text-[12px] mt-0.5"
-                          style={{ color: "var(--muted)" }}
-                        >
-                          {[r.year, r.event, r.conference, r.classification]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 gap-2">
-                        <RatingCell label="Concert" score={r.concert_final_score} />
-                        <RatingCell label="SR" score={r.sight_reading_final_score} />
-                      </div>
+                    <div>
+                      <p className="font-medium leading-snug">{r.school}</p>
+                      <p className="text-[12px] mt-0.5" style={{ color: "var(--muted)" }}>
+                        {[r.year, r.event, r.conference, r.classification]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+
+                    {/* Judges get their own rows here -- three numbers plus a
+                        badge is too wide to sit beside the school name. */}
+                    <div
+                      className="grid gap-1 pt-1.5 border-t"
+                      style={{ borderColor: "var(--border)" }}
+                    >
+                      <CardRow label="Concert">
+                        <JudgeScores scores={concert} final={r.concert_final_score} />
+                      </CardRow>
+                      <CardRow label="Sight-reading">
+                        <JudgeScores scores={sight} final={r.sight_reading_final_score} />
+                      </CardRow>
                     </div>
 
                     {selections.length > 0 && (
@@ -357,9 +363,11 @@ export default async function ResultsPage({
                       </ul>
                     )}
 
-                    {r.director && (
+                    {(r.director || r.additional_director) && (
                       <p className="text-[12px]" style={{ color: "var(--muted)" }}>
-                        {r.director}
+                        {[r.director, r.additional_director]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
                     )}
                   </DataCard>
@@ -369,7 +377,9 @@ export default async function ResultsPage({
               <Pagination
                 page={page}
                 pageCount={pageCount}
-                hrefFor={(p) => `/${buildQuery(sp, { page: p === 1 ? undefined : p })}`}
+                hrefFor={(p) =>
+                  `/blaine${buildQuery(sp, { page: p === 1 ? undefined : p })}`
+                }
               />
             </div>
           </Card>
