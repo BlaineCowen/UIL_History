@@ -73,7 +73,25 @@ def adjust_pml(pml):
     pml["arranger_search"] = pml["arranger"].str.replace(r"[^a-zA-Z]", "", regex=True)
     pml["event_name"] = pml["event_name"].str.lower()
 
-    pml["event_name"] = pml["event_name"].str.replace("band", "concert band")
+    # "band" -> "concert band", but only once. The plain replace was not
+    # idempotent: this function ends by writing pml back with
+    # to_sql(if_exists="replace"), so every run found "band" inside the
+    # "concert band" it produced last time and prepended another one. Six runs
+    # had left 1,792 rows reading "concert concert concert concert concert
+    # concert band", and 113 as "steel concert concert ... band" -- which is
+    # why the steel-band filter, looking for "steelband", stopped matching.
+    needs_prefix = pml["event_name"].str.contains("band", na=False) & ~pml[
+        "event_name"
+    ].str.contains("concert band", na=False)
+    pml.loc[needs_prefix, "event_name"] = pml.loc[
+        needs_prefix, "event_name"
+    ].str.replace("band", "concert band", regex=False)
+
+    # Repair rows already corrupted by previous runs, so the damage stops here
+    # rather than merely stopping growing.
+    pml["event_name"] = pml["event_name"].str.replace(
+        r"(?:concert\s+)+band", "concert band", regex=True
+    )
     # create song search column replace anything inside of parenthesis!
     pml["song_search"] = pml["title"].str.replace(r"\(.*?\)", "", regex=True)
     # remove anything not a letter

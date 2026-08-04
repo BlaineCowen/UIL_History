@@ -23,11 +23,30 @@ declare global {
 }
 
 function connect() {
-  const url = process.env.DATABASE_URL;
+  /**
+   * Vercel's Supabase integration injects POSTGRES_URL rather than
+   * DATABASE_URL, so accept either and save anyone the duplicate variable.
+   *
+   * Order matters: POSTGRES_URL is the *pooled* string (port 6543), which is
+   * the one serverless wants. POSTGRES_URL_NON_POOLING (5432) is deliberately
+   * not consulted -- it is for migrations and bulk loads, and using it here
+   * would exhaust connections. DATABASE_URL wins when set explicitly.
+   */
+  const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
   if (!url) {
     throw new Error(
-      "DATABASE_URL is not set. On Vercel, add it to the project's " +
-        "Environment Variables; use Supabase's pooler string (port 6543).",
+      "No database URL. Set DATABASE_URL (or POSTGRES_URL) in the Vercel " +
+        "project's Environment Variables. Use Supabase's pooled string, " +
+        "port 6543 -- the direct 5432 connection will exhaust connections " +
+        "under serverless.",
+    );
+  }
+  if (/:5432\//.test(url)) {
+    // Loud, because the failure mode is intermittent connection exhaustion
+    // under load rather than an obvious error in development.
+    console.warn(
+      "[db] Connected on port 5432 (direct). Serverless should use the " +
+        "pooled connection on 6543.",
     );
   }
   return postgres(url, {

@@ -691,8 +691,53 @@ def main():
         
     # Ensure all columns to save actually exist in df_processed
     columns_to_save = [col for col in columns_to_save if col in df_processed.columns]
-    df_to_save = df_processed[columns_to_save]
-    
+
+    # `df_processed` has been through adjust_results_df, which drops rows with
+    # an unparseable contest_date, a missing score, or any score equal to zero.
+    # Saving it directly used to REPLACE the whole results table with that
+    # filtered frame, permanently deleting those entries -- 227 vanished in one
+    # earlier run. The filtering is only meant to keep bad rows out of the
+    # averages, not out of the database.
+    #
+    # So merge the computed columns back onto the full frame, keyed on
+    # entry_number (the primary key). Rows that were legitimately excluded from
+    # the aggregates keep their original data and simply have no computed
+    # values, which is the honest representation.
+    dropped = len(df) - len(df_processed)
+    if "entry_number" in df.columns and "entry_number" in df_processed.columns:
+        full = df.set_index("entry_number")
+        calc = df_processed.set_index("entry_number")
+        for col in calc.columns:
+            if col not in full.columns:
+                full[col] = pd.NA
+        # update() aligns on the index and only writes non-NA values, so rows
+        # missing from `calc` keep everything they came in with.
+        full.update(calc)
+        df_to_save = full.reset_index()
+        df_to_save = df_to_save[[c for c in columns_to_save if c in df_to_save.columns]]
+        if dropped > 0:
+            print(
+                f"  {dropped:,} rows were excluded from the aggregate calculations"
+                f" (bad date, missing score, or a zero score) but are retained in"
+                f" the results table."
+            )
+    else:
+        # No primary key to merge on -- refuse to write rather than silently
+        # truncate the table.
+        if dropped > 0:
+            raise SystemExit(
+                f"Refusing to save: entry_number missing, and writing the"
+                f" processed frame would delete {dropped:,} rows from results."
+            )
+        df_to_save = df_processed[columns_to_save]
+
+    if len(df_to_save) < len(df):
+        raise SystemExit(
+            f"Refusing to save: {len(df):,} rows were read but only"
+            f" {len(df_to_save):,} would be written. This step must never"
+            f" shrink the results table."
+        )
+
     conn = sqlite3.connect(db_path)
     try:
         print(f"Saving updated results table to {db_path} (Columns: {columns_to_save})...")
