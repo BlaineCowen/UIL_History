@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import {
+  countDirectorRoles,
   countEntries,
   getConferences,
   getEntriesWithJudges,
@@ -8,6 +9,7 @@ import {
   getSummary,
   getYearBounds,
   type EntrySort,
+  type EntryWithJudges,
 } from "@/lib/db";
 import {
   parseEntryFilters,
@@ -93,6 +95,7 @@ export default async function BlainePage({
 
   const total = countEntries(filters);
   const summary = getSummary(filters);
+  const roles = countDirectorRoles(filters);
   const rows = getEntriesWithJudges(
     filters,
     sort,
@@ -137,6 +140,15 @@ export default async function BlainePage({
           three individual scores. Ratings run 1 (superior) to 5 — lower is
           better throughout.
         </p>
+        {roles && (
+          <p className="text-sm" style={{ color: "var(--ink-2)" }}>
+            Matching <strong>{formatNumber(total)}</strong>{" "}
+            {total === 1 ? "entry" : "entries"} —{" "}
+            <RoleDot main /> {formatNumber(roles.main)} as main director,{" "}
+            <RoleDot /> {formatNumber(roles.additional)} as additional
+            {roles.both > 0 && ` (${formatNumber(roles.both)} both)`}.
+          </p>
+        )}
       </header>
 
       <Filters
@@ -266,12 +278,7 @@ export default async function BlainePage({
                           className="border-b py-2.5 pr-4 min-w-[130px]"
                           style={{ color: "var(--ink-2)" }}
                         >
-                          {r.director || "—"}
-                          {r.additional_director && (
-                            <div className="text-[11px]" style={{ color: "var(--muted)" }}>
-                              + {r.additional_director}
-                            </div>
-                          )}
+                          <DirectorCell entry={r} />
                         </td>
                         <td
                           className="whitespace-nowrap border-b py-2.5 pr-4"
@@ -364,11 +371,9 @@ export default async function BlainePage({
                     )}
 
                     {(r.director || r.additional_director) && (
-                      <p className="text-[12px]" style={{ color: "var(--muted)" }}>
-                        {[r.director, r.additional_director]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
+                      <div className="text-[12px]" style={{ color: "var(--muted)" }}>
+                        <DirectorCell entry={r} />
+                      </div>
                     )}
                   </DataCard>
                 ))}
@@ -386,5 +391,63 @@ export default async function BlainePage({
         </>
       )}
     </div>
+  );
+}
+
+/** Colour is never the only cue -- every tag carries its word too. */
+const MAIN_COLOR = "var(--series-1)";
+const ADDITIONAL_COLOR = "var(--series-2)";
+
+function RoleDot({ main }: { main?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className="inline-block h-2 w-2 rounded-full align-middle"
+      style={{ background: main ? MAIN_COLOR : ADDITIONAL_COLOR }}
+    />
+  );
+}
+
+function RoleTag({ main }: { main?: boolean }) {
+  return (
+    <span
+      className="ml-1.5 inline-flex items-center rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide align-middle text-white"
+      style={{ background: main ? MAIN_COLOR : ADDITIONAL_COLOR }}
+    >
+      {main ? "Main" : "Additional"}
+    </span>
+  );
+}
+
+/**
+ * Both names for the entry, with a tag on whichever one the director search
+ * actually hit. The flags come from SQL, so a tag appears if and only if that
+ * field is why the row is here. With no director filter active they are
+ * undefined and this renders exactly as before.
+ */
+function DirectorCell({ entry }: { entry: EntryWithJudges }) {
+  const hitMain = Boolean(entry.matched_director);
+  const hitAdditional = Boolean(entry.matched_additional);
+
+  return (
+    <>
+      <span style={hitMain ? { color: "var(--ink)", fontWeight: 600 } : undefined}>
+        {entry.director || "—"}
+      </span>
+      {hitMain && <RoleTag main />}
+      {entry.additional_director && (
+        <div
+          className="text-[11px]"
+          style={
+            hitAdditional
+              ? { color: "var(--ink)", fontWeight: 600 }
+              : { color: "var(--muted)" }
+          }
+        >
+          + {entry.additional_director}
+          {hitAdditional && <RoleTag />}
+        </div>
+      )}
+    </>
   );
 }

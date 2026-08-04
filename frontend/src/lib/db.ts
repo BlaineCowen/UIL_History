@@ -88,7 +88,19 @@ export type EntryWithJudges = Entry & {
   sight_reading_score_1: number;
   sight_reading_score_2: number;
   sight_reading_score_3: number;
+  /**
+   * Which field the director search hit, present only when one is active.
+   * Computed in SQL by the same LIKE ... COLLATE NOCASE the WHERE clause uses,
+   * so the label can never contradict why the row was returned -- JS
+   * toLowerCase folds Unicode that SQLite's NOCASE leaves alone.
+   * SQLite yields 0/1, or null when the column itself is null.
+   */
+  matched_director?: number | null;
+  matched_additional?: number | null;
 };
+
+/** How a filtered director appears across the matching entries. */
+export type DirectorRoles = { main: number; additional: number; both: number };
 
 export type Song = {
   code: string;
@@ -282,6 +294,8 @@ function entriesQuery(
   dir: "asc" | "desc",
   limit: number,
   offset: number,
+  /** Bound before the WHERE params -- placeholders inside `columns`. */
+  selectParams: unknown[] = [],
 ) {
   const { sql, params } = buildWhere(f);
   // Both sides come from the whitelisting EntrySort type, not user input.
@@ -294,7 +308,12 @@ function entriesQuery(
                 entry_number ASC
        LIMIT ? OFFSET ?`,
     )
-    .all(...params, limit, offset);
+    .all(...selectParams, ...params, limit, offset);
+}
+
+/** The `%term%` the director filter matches with, or null when it is off. */
+function directorTerm(f: EntryFilters): string | null {
+  return f.director ? `%${f.director.trim()}%` : null;
 }
 
 export function getEntries(
@@ -314,14 +333,50 @@ export function getEntriesWithJudges(
   limit: number,
   offset: number,
 ): EntryWithJudges[] {
+  const term = directorTerm(f);
+  const matchSelect = term
+    ? `, (director LIKE ? COLLATE NOCASE) AS matched_director,
+         (additional_director LIKE ? COLLATE NOCASE) AS matched_additional`
+    : "";
   return entriesQuery(
-    `${ENTRY_SELECT}, ${JUDGE_SELECT}`,
+    `${ENTRY_SELECT}, ${JUDGE_SELECT}${matchSelect}`,
     f,
     sort,
     dir,
     limit,
     offset,
+    term ? [term, term] : [],
   ) as EntryWithJudges[];
+}
+
+/**
+ * Split the matching entries by the role the searched director held. `both`
+ * counts entries naming them in each field, so it is a subset of the other
+ * two rather than a third bucket.
+ */
+export function countDirectorRoles(f: EntryFilters): DirectorRoles | null {
+  const term = directorTerm(f);
+  if (!term) return null;
+  const { sql, params } = buildWhere(f);
+  const row = getDb()
+    .prepare(
+      `SELECT
+         SUM(CASE WHEN director LIKE ? COLLATE NOCASE THEN 1 ELSE 0 END) AS main,
+         SUM(CASE WHEN additional_director LIKE ? COLLATE NOCASE THEN 1 ELSE 0 END) AS additional,
+         SUM(CASE WHEN director LIKE ? COLLATE NOCASE
+                   AND additional_director LIKE ? COLLATE NOCASE THEN 1 ELSE 0 END) AS both
+       FROM entries ${sql}`,
+    )
+    .get(term, term, term, term, ...params) as {
+    main: number | null;
+    additional: number | null;
+    both: number | null;
+  };
+  return {
+    main: row.main ?? 0,
+    additional: row.additional ?? 0,
+    both: row.both ?? 0,
+  };
 }
 
 export type Summary = {
