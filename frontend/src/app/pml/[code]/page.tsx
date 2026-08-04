@@ -12,7 +12,16 @@ import {
 } from "@/lib/db";
 import { formatNumber, formatScore, pct } from "@/lib/format";
 import { SongYearly } from "@/components/charts/SongYearly";
-import { Card, ScoreBadge, SectionTitle, StatTile, TableScroll } from "@/components/ui";
+import {
+  Card,
+  DataCard,
+  DataList,
+  RatingCell,
+  ScoreBadge,
+  SectionTitle,
+  StatTile,
+  TableScroll,
+} from "@/components/ui";
 
 type Props = { params: Promise<{ code: string }> };
 
@@ -237,6 +246,38 @@ export default async function SongPage({ params }: Props) {
                   </tbody>
                 </table>
               </TableScroll>
+
+              <DataList>
+                {performances.map((p) => (
+                  <DataCard key={p.entry_number}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium leading-snug">{p.school}</p>
+                        <p
+                          className="text-[12px] mt-0.5"
+                          style={{ color: "var(--muted)" }}
+                        >
+                          {[p.year, p.event, p.conference, p.classification]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                        {p.director && (
+                          <p
+                            className="text-[12px] mt-0.5"
+                            style={{ color: "var(--muted)" }}
+                          >
+                            {p.director}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <RatingCell label="Concert" score={p.concert_final_score} />
+                        <RatingCell label="SR" score={p.sight_reading_final_score} />
+                      </div>
+                    </div>
+                  </DataCard>
+                ))}
+              </DataList>
             </div>
           </Card>
         </>

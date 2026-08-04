@@ -17,7 +17,15 @@ import {
 import { formatNumber, formatScore } from "@/lib/format";
 import { SongFilters } from "@/components/SongFilters";
 import { SongScatter } from "@/components/charts/SongScatter";
-import { Card, EmptyState, Pagination, SectionTitle, TableScroll } from "@/components/ui";
+import {
+  Card,
+  DataCard,
+  DataList,
+  EmptyState,
+  Pagination,
+  SectionTitle,
+  TableScroll,
+} from "@/components/ui";
 
 export const metadata: Metadata = {
   title: "Prescribed Music List",
@@ -90,6 +98,29 @@ export default async function PmlPage({
                   COLUMNS.find((c) => c.key === sort)?.label ?? sort
                 } (${dir === "desc" ? "high to low" : "low to high"})`}
               />
+              {/* The card view has no column headers to click, so sorting
+                  gets its own control below sm. */}
+              <div className="sm:hidden -mt-1 mb-3 flex flex-wrap gap-1.5">
+                {COLUMNS.map((c) => {
+                  const active = sort === c.key;
+                  return (
+                    <Link
+                      key={c.key}
+                      href={sortHref(c.key)}
+                      aria-current={active ? "true" : undefined}
+                      className="tap-sm inline-flex items-center gap-1 rounded-full border px-3 text-[13px] transition"
+                      style={{
+                        background: active ? "var(--series-1)" : "var(--surface)",
+                        color: active ? "#fff" : "var(--ink-2)",
+                        borderColor: active ? "var(--series-1)" : "var(--border-strong)",
+                      }}
+                    >
+                      {c.label}
+                      {active && <span aria-hidden>{dir === "asc" ? "↑" : "↓"}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
             <div className="px-4 sm:px-5 pb-4 sm:pb-5">
               <TableScroll>
@@ -167,6 +198,43 @@ export default async function PmlPage({
                 </table>
               </TableScroll>
 
+              <DataList>
+                {rows.map((s) => (
+                  <DataCard key={s.code} href={`/pml/${encodeURIComponent(s.code)}`}>
+                    <div>
+                      <p className="font-medium leading-snug">{s.title}</p>
+                      <p
+                        className="text-[12px] mt-0.5"
+                        style={{ color: "var(--muted)" }}
+                      >
+                        {s.composer}
+                        {s.arranger ? ` · arr. ${s.arranger}` : ""}
+                      </p>
+                    </div>
+                    <p className="text-[12px]" style={{ color: "var(--ink-2)" }}>
+                      {s.event_name} · Grade {s.grade}
+                    </p>
+                    <div
+                      className="grid grid-cols-3 gap-2 pt-1.5 border-t text-[13px]"
+                      style={{ borderColor: "var(--border)" }}
+                    >
+                      <MiniStat
+                        label="Performances"
+                        value={formatNumber(s.performance_count)}
+                      />
+                      <MiniStat
+                        label="Concert"
+                        value={formatScore(s.average_concert_score)}
+                      />
+                      <MiniStat
+                        label="Song score"
+                        value={s.song_score == null ? "—" : s.song_score.toFixed(1)}
+                      />
+                    </div>
+                  </DataCard>
+                ))}
+              </DataList>
+
               <Pagination
                 page={page}
                 pageCount={pageCount}
@@ -177,6 +245,18 @@ export default async function PmlPage({
         </>
       )}
     </div>
+  );
+}
+
+/** A labelled figure in the phone card view's footer strip. */
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="grid gap-0.5">
+      <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+        {label}
+      </span>
+      <span className="tnum font-medium">{value}</span>
+    </span>
   );
 }
 

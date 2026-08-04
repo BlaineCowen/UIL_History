@@ -14,7 +14,18 @@ import { choice, formatNumber, formatScore, pct } from "@/lib/format";
 import { Filters } from "@/components/Filters";
 import { ScoreTrend } from "@/components/charts/ScoreTrend";
 import { Distribution } from "@/components/charts/Distribution";
-import { Card, EmptyState, Pagination, ScoreBadge, SectionTitle, StatTile, TableScroll } from "@/components/ui";
+import {
+  Card,
+  DataCard,
+  DataList,
+  EmptyState,
+  Pagination,
+  RatingCell,
+  ScoreBadge,
+  SectionTitle,
+  StatTile,
+  TableScroll,
+} from "@/components/ui";
 
 const PAGE_SIZE = 50;
 
@@ -35,6 +46,17 @@ export default async function ResultsPage({
   const summary = getSummary(filters);
   const rows = getEntries(filters, PAGE_SIZE, (page - 1) * PAGE_SIZE);
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // The table and the phone card list render the same three selections, so
+  // they are unpacked once here rather than in each view.
+  const entries = rows.map((r) => ({
+    row: r,
+    selections: [
+      { t: r.title_1, c: r.composer_1, code: r.code_1 },
+      { t: r.title_2, c: r.composer_2, code: r.code_2 },
+      { t: r.title_3, c: r.composer_3, code: r.code_3 },
+    ].filter((s) => (s.t ?? "").trim()),
+  }));
 
   const selected = getScoresByYear(filters);
   // The comparison line is the same ensemble with every other filter removed.
@@ -169,13 +191,7 @@ export default async function ResultsPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((r) => {
-                      const selections = [
-                        { t: r.title_1, c: r.composer_1, code: r.code_1 },
-                        { t: r.title_2, c: r.composer_2, code: r.code_2 },
-                        { t: r.title_3, c: r.composer_3, code: r.code_3 },
-                      ].filter((s) => (s.t ?? "").trim());
-
+                    {entries.map(({ row: r, selections }) => {
                       return (
                         <tr key={r.entry_number} className="align-top">
                           <td className="tnum whitespace-nowrap border-b py-2.5 pr-4">
@@ -240,6 +256,55 @@ export default async function ResultsPage({
                   </tbody>
                 </table>
               </TableScroll>
+
+              <DataList>
+                {entries.map(({ row: r, selections }) => (
+                  <DataCard key={r.entry_number}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium leading-snug">{r.school}</p>
+                        <p
+                          className="text-[12px] mt-0.5"
+                          style={{ color: "var(--muted)" }}
+                        >
+                          {[r.year, r.event, r.conference, r.classification]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <RatingCell label="Concert" score={r.concert_final_score} />
+                        <RatingCell label="SR" score={r.sight_reading_final_score} />
+                      </div>
+                    </div>
+
+                    {selections.length > 0 && (
+                      <ul className="grid gap-1 pt-0.5">
+                        {selections.map((s, i) => (
+                          <li key={i} className="text-[13px] leading-snug">
+                            {s.code ? (
+                              <Link
+                                href={`/pml/${encodeURIComponent(s.code)}`}
+                                className="underline decoration-[var(--border-strong)] underline-offset-2"
+                              >
+                                {choice(s.t, s.c)}
+                              </Link>
+                            ) : (
+                              choice(s.t, s.c)
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {r.director && (
+                      <p className="text-[12px]" style={{ color: "var(--muted)" }}>
+                        {r.director}
+                      </p>
+                    )}
+                  </DataCard>
+                ))}
+              </DataList>
 
               <Pagination
                 page={page}

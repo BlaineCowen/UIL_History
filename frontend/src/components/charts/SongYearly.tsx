@@ -28,7 +28,7 @@ export function SongYearly({ data }: { data: Row[] }) {
       <ChartFrame
         title="Performances per year"
         hint="How often this piece was programmed."
-        height={220}
+        heightClass="h-[190px] sm:h-[220px]"
       >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: -20 }}>
@@ -75,7 +75,7 @@ export function SongYearly({ data }: { data: Row[] }) {
             ]}
           />
         }
-        height={220}
+        heightClass="h-[190px] sm:h-[220px]"
       >
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: -20 }}>

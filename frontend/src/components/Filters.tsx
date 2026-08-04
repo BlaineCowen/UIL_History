@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { buildQuery } from "@/lib/params";
+import { RangeRow } from "@/components/RangeRow";
 
 type Option = { value: string; label: string; count?: number };
 
@@ -57,7 +58,7 @@ export function Filters(props: FiltersProps) {
         <div
           role="group"
           aria-label="Ensemble"
-          className="inline-flex rounded-lg border p-0.5"
+          className="flex w-full sm:inline-flex sm:w-auto rounded-lg border p-0.5"
           style={{ background: "var(--surface-2)" }}
         >
           {props.genEvents.map((g) => {
@@ -68,7 +69,7 @@ export function Filters(props: FiltersProps) {
                 type="button"
                 onClick={() => push({ event: active ? undefined : g, sub: undefined })}
                 aria-pressed={active}
-                className="rounded-[7px] px-3 sm:px-4 py-1.5 text-sm font-medium transition"
+                className="tap-sm flex-1 sm:flex-none rounded-[7px] px-3 sm:px-4 py-1.5 text-sm font-medium transition"
                 style={{
                   background: active ? "var(--series-1)" : "transparent",
                   color: active ? "#fff" : "var(--ink-2)",
@@ -83,7 +84,7 @@ export function Filters(props: FiltersProps) {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition hover:border-[var(--muted)]"
+          className="tap inline-flex items-center gap-2 rounded-lg border px-3.5 py-1.5 text-sm font-medium transition hover:border-[var(--muted)]"
           aria-expanded={open}
         >
           <SlidersHorizontal size={15} aria-hidden />
@@ -102,7 +103,7 @@ export function Filters(props: FiltersProps) {
           <button
             type="button"
             onClick={() => startTransition(() => router.replace(pathname, { scroll: false }))}
-            className="inline-flex items-center gap-1.5 text-sm transition hover:opacity-70"
+            className="tap inline-flex items-center gap-1.5 px-1 text-sm transition hover:opacity-70"
             style={{ color: "var(--ink-2)" }}
           >
             <RotateCcw size={14} aria-hidden />
@@ -183,30 +184,29 @@ export function Filters(props: FiltersProps) {
               </select>
             </Field>
 
-            <Field label={`Years — ${from} to ${to}`}>
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  aria-label="Earliest year"
-                  min={props.yearBounds.min}
-                  max={props.yearBounds.max}
+            {/* Two half-width sliders in one row are a coin-toss to hit with a
+                thumb, so they stack and get their own value labels on phones. */}
+            <div className="grid gap-1.5">
+              <span className="text-xs font-medium" style={{ color: "var(--ink-2)" }}>
+                Years — {from} to {to}
+              </span>
+              <div className="grid gap-1 sm:grid-cols-2 sm:gap-3 sm:items-center">
+                <RangeRow
+                  label="From"
                   value={from}
-                  onChange={(e) =>
-                    push({ from: Math.min(Number(e.target.value), to), to })
-                  }
-                />
-                <input
-                  type="range"
-                  aria-label="Latest year"
                   min={props.yearBounds.min}
                   max={props.yearBounds.max}
+                  onChange={(v) => push({ from: Math.min(v, to), to })}
+                />
+                <RangeRow
+                  label="To"
                   value={to}
-                  onChange={(e) =>
-                    push({ from, to: Math.max(Number(e.target.value), from) })
-                  }
+                  min={props.yearBounds.min}
+                  max={props.yearBounds.max}
+                  onChange={(v) => push({ from, to: Math.max(v, from) })}
                 />
               </div>
-            </Field>
+            </div>
           </div>
 
           {props.conferences.length > 0 && (
@@ -259,7 +259,7 @@ function ChipGroup({
             type="button"
             onClick={() => onToggle(o.value)}
             aria-pressed={active}
-            className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] transition"
+            className="tap-sm inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] transition"
             style={{
               background: active ? "var(--series-1)" : "var(--surface)",
               color: active ? "#fff" : "var(--ink-2)",

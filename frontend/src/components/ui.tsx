@@ -139,44 +139,131 @@ export function Pagination({
   const prev = Math.max(1, page - 1);
   const next = Math.min(pageCount, page + 1);
 
+  const button =
+    "tap inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm font-medium transition hover:border-[var(--muted)]";
+
   return (
-    <div className="flex items-center justify-between gap-3 pt-3">
+    <div className="flex items-center justify-between gap-3 pt-4">
       <Link
         href={hrefFor(prev)}
         aria-disabled={page === 1}
-        className="rounded-lg border px-3 py-1.5 text-sm transition hover:border-[var(--muted)]"
+        className={button}
         style={{
           background: "var(--surface)",
           opacity: page === 1 ? 0.45 : 1,
           pointerEvents: page === 1 ? "none" : undefined,
         }}
       >
-        ← Previous
+        <span aria-hidden>←</span>
+        <span className="ml-1.5">Prev</span>
       </Link>
-      <span className="tnum text-sm" style={{ color: "var(--ink-2)" }}>
+      <span
+        className="tnum text-[13px] sm:text-sm text-center"
+        style={{ color: "var(--ink-2)" }}
+      >
         Page {page.toLocaleString()} of {pageCount.toLocaleString()}
       </span>
       <Link
         href={hrefFor(next)}
         aria-disabled={page === pageCount}
-        className="rounded-lg border px-3 py-1.5 text-sm transition hover:border-[var(--muted)]"
+        className={button}
         style={{
           background: "var(--surface)",
           opacity: page === pageCount ? 0.45 : 1,
           pointerEvents: page === pageCount ? "none" : undefined,
         }}
       >
-        Next →
+        <span className="mr-1.5">Next</span>
+        <span aria-hidden>→</span>
       </Link>
     </div>
   );
 }
 
-/** Wide tables scroll inside this, so the page body never scrolls sideways. */
+/**
+ * Wide tables scroll inside this, so the page body never scrolls sideways.
+ * Hidden below `sm` -- narrow screens get the DataList card view instead, so
+ * nothing here has to be read through a 390px-wide window.
+ */
 export function TableScroll({ children }: { children: ReactNode }) {
   return (
-    <div className="-mx-4 sm:mx-0 overflow-x-auto">
+    <div className="hscroll hidden sm:block -mx-4 sm:mx-0 overflow-x-auto">
       <div className="min-w-full px-4 sm:px-0">{children}</div>
+    </div>
+  );
+}
+
+/** The phone-sized counterpart to a table: one card per row, stacked. */
+export function DataList({ children }: { children: ReactNode }) {
+  return <ul className="grid gap-2 sm:hidden">{children}</ul>;
+}
+
+export function DataCard({
+  children,
+  href,
+}: {
+  children: ReactNode;
+  href?: string;
+}) {
+  const body = (
+    <div
+      className="rounded-xl border p-3.5 grid gap-2"
+      style={{ background: "var(--surface-2)" }}
+    >
+      {children}
+    </div>
+  );
+  return (
+    <li>
+      {href ? (
+        <Link href={href} className="block transition active:opacity-60">
+          {body}
+        </Link>
+      ) : (
+        body
+      )}
+    </li>
+  );
+}
+
+/**
+ * A labelled rating for the card views. Two bare badges side by side would be
+ * ambiguous; the table doesn't need this because it has column headers.
+ */
+export function RatingCell({
+  label,
+  score,
+}: {
+  label: string;
+  score: number | null | undefined;
+}) {
+  return (
+    <span className="grid justify-items-center gap-1">
+      <span
+        className="text-[10px] font-medium uppercase tracking-wide"
+        style={{ color: "var(--muted)" }}
+      >
+        {label}
+      </span>
+      <ScoreBadge score={score} />
+    </span>
+  );
+}
+
+/** A label/value line inside a DataCard. */
+export function CardRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-[13px]">
+      <span className="shrink-0" style={{ color: "var(--muted)" }}>
+        {label}
+      </span>
+      <span className="text-right min-w-0">{children}</span>
     </div>
   );
 }

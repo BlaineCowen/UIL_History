@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 
 /**
  * Shared chart chrome. Colours come from CSS custom properties so light and
@@ -96,25 +96,48 @@ export function Legend({
   );
 }
 
+/**
+ * Recharts sizes and lays out its axes in JS, so tick density can't be fixed
+ * in CSS -- charts need to know the breakpoint. matchMedia is an external
+ * store; the server snapshot is `false` so SSR renders the desktop form and
+ * hydration corrects it, same approach as ThemeToggle.
+ */
+const NARROW = "(max-width: 639px)";
+
+function subscribeNarrow(onChange: () => void) {
+  const mql = window.matchMedia(NARROW);
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+
+export function useIsNarrow(): boolean {
+  return useSyncExternalStore(
+    subscribeNarrow,
+    () => window.matchMedia(NARROW).matches,
+    () => false,
+  );
+}
+
 export function ChartFrame({
   title,
   hint,
   legend,
   children,
-  height = 260,
+  /** Tailwind height classes -- charts are shorter on a phone. */
+  heightClass = "h-[210px] sm:h-[260px]",
 }: {
   title: string;
   hint?: string;
   legend?: ReactNode;
   children: ReactNode;
-  height?: number;
+  heightClass?: string;
 }) {
   return (
     <div
       className="rounded-xl border p-4 sm:p-5"
       style={{ background: "var(--surface)" }}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 mb-3">
         <div className="min-w-0">
           <h3 className="text-[15px] font-semibold tracking-tight">{title}</h3>
           {hint && (
@@ -125,7 +148,7 @@ export function ChartFrame({
         </div>
         {legend}
       </div>
-      <div style={{ height }}>{children}</div>
+      <div className={heightClass}>{children}</div>
     </div>
   );
 }

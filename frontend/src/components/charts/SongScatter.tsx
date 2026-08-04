@@ -11,7 +11,15 @@ import {
   YAxis,
   ZAxis,
 } from "recharts";
-import { AXIS_PROPS, ChartFrame, GRID_PROPS, Legend, SERIES, TooltipShell } from "./ChartKit";
+import {
+  AXIS_PROPS,
+  ChartFrame,
+  GRID_PROPS,
+  Legend,
+  SERIES,
+  TooltipShell,
+  useIsNarrow,
+} from "./ChartKit";
 
 export type ScatterPoint = {
   code: string;
@@ -37,6 +45,7 @@ function groupOf(eventName: string): Group {
 
 export function SongScatter({ points }: { points: ScatterPoint[] }) {
   const router = useRouter();
+  const narrow = useIsNarrow();
 
   const byGroup = new Map<Group, ScatterPoint[]>(GROUPS.map((g) => [g, []]));
   for (const p of points) byGroup.get(groupOf(p.event_name))!.push(p);
@@ -44,7 +53,7 @@ export function SongScatter({ points }: { points: ScatterPoint[] }) {
 
   if (!points.length) {
     return (
-      <ChartFrame title="Concert vs sight-reading" height={320}>
+      <ChartFrame title="Concert vs sight-reading" heightClass="h-[280px] sm:h-[320px]">
         <div
           className="h-full grid place-items-center text-sm"
           style={{ color: "var(--muted)" }}
@@ -58,16 +67,16 @@ export function SongScatter({ points }: { points: ScatterPoint[] }) {
   return (
     <ChartFrame
       title="Concert vs sight-reading average"
-      hint="Each bubble is a song; size is how often it has been performed. Best scores sit top-left. Select a row in the table below for detail."
+      hint="Each bubble is a song; size is how often it has been performed. Best scores sit top-left. Select a bubble, or any song listed below, for its full history."
       legend={
         <Legend
           items={present.map((g, i) => ({ label: g, color: SERIES[i], shape: "dot" }))}
         />
       }
-      height={340}
+      heightClass="h-[300px] sm:h-[340px]"
     >
       <ResponsiveContainer width="100%" height="100%">
-        <ScatterChart margin={{ top: 8, right: 12, bottom: 4, left: -14 }}>
+        <ScatterChart margin={{ top: 8, right: 12, bottom: 12, left: -14 }}>
           <CartesianGrid {...GRID_PROPS} vertical />
           {/* Both axes reversed: 1 is best, so the strongest songs land top-left. */}
           <XAxis
@@ -96,10 +105,12 @@ export function SongScatter({ points }: { points: ScatterPoint[] }) {
             {...AXIS_PROPS}
             tickFormatter={(v) => Number(v).toFixed(1)}
           />
+          {/* Bubble areas scale with the plot: a 520px^2 bubble that reads as
+              one song on a desktop chart swallows a quarter of a phone one. */}
           <ZAxis
             type="number"
             dataKey="performance_count"
-            range={[16, 520]}
+            range={narrow ? [10, 260] : [16, 520]}
             name="Performances"
           />
           <Tooltip

@@ -24,7 +24,7 @@ export function NavLinks() {
             key={link.href}
             href={link.href}
             aria-current={active ? "page" : undefined}
-            className="rounded-lg px-2.5 sm:px-3 py-1.5 font-medium transition"
+            className="tap inline-flex items-center rounded-lg px-2.5 sm:px-3 py-1.5 font-medium transition"
             style={{
               background: active ? "var(--surface-2)" : "transparent",
               color: active ? "var(--ink)" : "var(--ink-2)",

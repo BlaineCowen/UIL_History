@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NavLinks } from "@/components/NavLinks";
@@ -11,6 +11,18 @@ export const metadata: Metadata = {
   },
   description:
     "Explore two decades of Texas UIL Concert & Sight-Reading contest results and the Prescribed Music List.",
+};
+
+/**
+ * Matches --page in globals.css, so the mobile browser chrome blends into the
+ * page instead of banding against it. Deliberately no maximumScale/
+ * userScalable: pinch-zoom stays available.
+ */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f9f9f7" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d0d0d" },
+  ],
 };
 
 /**
@@ -39,10 +51,11 @@ export default function RootLayout({
       <body className="min-h-screen flex flex-col">
         <header className="sticky top-0 z-30 border-b backdrop-blur-md bg-[color-mix(in_srgb,var(--page)_88%,transparent)]">
           <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-6">
-            <div className="flex h-14 items-center gap-3 sm:gap-6">
+            <div className="flex h-14 items-center gap-2 sm:gap-6">
               <Link
                 href="/"
-                className="flex items-center gap-2 shrink-0 font-semibold tracking-tight"
+                aria-label="UIL History — home"
+                className="tap flex items-center gap-2 shrink-0 font-semibold tracking-tight"
               >
                 <span
                   aria-hidden
@@ -63,11 +76,11 @@ export default function RootLayout({
           </div>
         </header>
 
-        <main className="flex-1 mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-6 sm:py-8">
+        <main className="flex-1 mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-5 sm:py-8">
           {children}
         </main>
 
-        <footer className="border-t mt-8">
+        <footer className="border-t mt-8 pb-[env(safe-area-inset-bottom)]">
           <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-6 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
             <p className="text-sm" style={{ color: "var(--ink-2)" }}>
               Built by{" "}
@@ -83,7 +96,7 @@ export default function RootLayout({
               href="https://www.buymeacoffee.com/blainecowen"
               target="_blank"
               rel="noreferrer noopener"
-              className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition hover:border-[var(--muted)]"
+              className="tap inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition hover:border-[var(--muted)] self-start sm:self-auto"
               style={{ background: "var(--surface)" }}
             >
               ☕ Buy me a coffee

@@ -10,11 +10,21 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { AXIS_PROPS, ChartFrame, GRID_PROPS, Legend, SERIES, TooltipShell } from "./ChartKit";
+import {
+  AXIS_PROPS,
+  ChartFrame,
+  GRID_PROPS,
+  Legend,
+  SERIES,
+  TooltipShell,
+  useIsNarrow,
+} from "./ChartKit";
 import { SCORE_LABELS } from "@/lib/format";
 import type { Distribution as Row } from "@/lib/db";
 
 export function Distribution({ data, total }: { data: Row[]; total: number }) {
+  const narrow = useIsNarrow();
+
   const legendItems = [
     { label: "Concert", color: SERIES[0], shape: "square" as const },
     { label: "Sight-reading", color: SERIES[1], shape: "square" as const },
@@ -25,7 +35,7 @@ export function Distribution({ data, total }: { data: Row[]; total: number }) {
       title="Rating distribution"
       hint="How often each rating was awarded. 1 is the best possible score."
       legend={<Legend items={legendItems} />}
-      height={260}
+      heightClass="h-[220px] sm:h-[260px]"
     >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
@@ -34,16 +44,21 @@ export function Distribution({ data, total }: { data: Row[]; total: number }) {
           barGap={2}
         >
           <CartesianGrid {...GRID_PROPS} />
+          {/* "1 · Superior" through "5 · Poor" needs ~70px a tick; a phone
+              gives about 60. Below sm the word is dropped and the legend in
+              the tooltip carries it. */}
           <XAxis
             dataKey="score"
             {...AXIS_PROPS}
-            tickFormatter={(v) => `${v} · ${SCORE_LABELS[v as number] ?? ""}`}
+            tickFormatter={(v) =>
+              narrow ? String(v) : `${v} · ${SCORE_LABELS[v as number] ?? ""}`
+            }
             interval={0}
             tickMargin={6}
           />
           <YAxis
             {...AXIS_PROPS}
-            width={52}
+            width={narrow ? 40 : 52}
             tickFormatter={(v) =>
               v >= 1000 ? `${Math.round((v as number) / 1000)}k` : String(v)
             }

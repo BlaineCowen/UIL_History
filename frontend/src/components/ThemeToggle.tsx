@@ -62,7 +62,7 @@ export function ThemeToggle() {
       onClick={cycle}
       title={LABELS[theme]}
       aria-label={LABELS[theme]}
-      className="grid h-9 w-9 place-items-center rounded-lg border transition hover:border-[var(--muted)]"
+      className="grid h-11 w-11 sm:h-9 sm:w-9 place-items-center rounded-lg border transition hover:border-[var(--muted)]"
       style={{ background: "var(--surface)" }}
     >
       <Icon size={16} strokeWidth={2} aria-hidden />

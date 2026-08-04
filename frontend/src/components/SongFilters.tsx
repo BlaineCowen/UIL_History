@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RotateCcw } from "lucide-react";
 import { buildQuery } from "@/lib/params";
+import { RangeRow } from "@/components/RangeRow";
 
 export function SongFilters({
   events,
@@ -69,29 +70,27 @@ export function SongFilters({
           </select>
         </label>
 
-        <label className="grid gap-1.5">
+        <div className="grid gap-1.5">
           <span className="text-xs font-medium" style={{ color: "var(--ink-2)" }}>
             Grade — {gmin} to {gmax}
           </span>
-          <div className="flex items-center gap-3">
-            <input
-              type="range"
-              aria-label="Minimum grade"
-              min={gradeBounds.min}
-              max={gradeBounds.max}
+          <div className="grid gap-1">
+            <RangeRow
+              label="Min"
               value={gmin}
-              onChange={(e) => push({ gmin: Math.min(Number(e.target.value), gmax), gmax })}
-            />
-            <input
-              type="range"
-              aria-label="Maximum grade"
               min={gradeBounds.min}
               max={gradeBounds.max}
+              onChange={(v) => push({ gmin: Math.min(v, gmax), gmax })}
+            />
+            <RangeRow
+              label="Max"
               value={gmax}
-              onChange={(e) => push({ gmin, gmax: Math.max(Number(e.target.value), gmin) })}
+              min={gradeBounds.min}
+              max={gradeBounds.max}
+              onChange={(v) => push({ gmin, gmax: Math.max(v, gmin) })}
             />
           </div>
-        </label>
+        </div>
 
         <label className="grid gap-1.5">
           <span className="text-xs font-medium" style={{ color: "var(--ink-2)" }}>
@@ -114,7 +113,7 @@ export function SongFilters({
           <div
             role="group"
             aria-label="Accompaniment"
-            className="inline-flex rounded-lg border p-0.5"
+            className="flex w-full sm:inline-flex sm:w-auto rounded-lg border p-0.5"
             style={{ background: "var(--surface-2)" }}
           >
             {[
@@ -129,7 +128,7 @@ export function SongFilters({
                   type="button"
                   onClick={() => push({ acc: o.value || undefined })}
                   aria-pressed={active}
-                  className="rounded-[7px] px-3 py-1.5 text-[13px] font-medium transition"
+                  className="tap-sm flex-1 sm:flex-none rounded-[7px] px-3 py-1.5 text-[13px] font-medium transition"
                   style={{
                     background: active ? "var(--series-1)" : "transparent",
                     color: active ? "#fff" : "var(--ink-2)",
@@ -146,7 +145,7 @@ export function SongFilters({
           <button
             type="button"
             onClick={() => startTransition(() => router.replace(pathname, { scroll: false }))}
-            className="inline-flex items-center gap-1.5 text-sm transition hover:opacity-70"
+            className="tap inline-flex items-center gap-1.5 px-1 text-sm transition hover:opacity-70"
             style={{ color: "var(--ink-2)" }}
           >
             <RotateCcw size={14} aria-hidden />
