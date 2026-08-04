@@ -8,7 +8,6 @@ parent_dir = os.path.dirname(current_dir) # UIL_History directory
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from numpy.lib.arraysetops import unique
 import pandas as pd
 import numpy as np
 import difflib
@@ -16,7 +15,6 @@ import sqlite3
 from multiprocessing import Pool
 import re
 from fuzzywuzzy import process
-from scrape_data.fix_pml import fix_pml
 from tqdm import tqdm
 
 # from add_new_performance_data import main as add_new_performance_data
