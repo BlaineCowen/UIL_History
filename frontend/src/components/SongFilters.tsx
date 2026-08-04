@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RotateCcw } from "lucide-react";
 import { buildQuery } from "@/lib/params";
-import { RangeRow } from "@/components/RangeRow";
+import { RangePair, RangeSingle } from "@/components/RangeFilter";
 
 export function SongFilters({
   events,
@@ -70,42 +70,25 @@ export function SongFilters({
           </select>
         </label>
 
-        <div className="grid gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--ink-2)" }}>
-            Grade — {gmin} to {gmax}
-          </span>
-          <div className="grid gap-1">
-            <RangeRow
-              label="Min"
-              value={gmin}
-              min={gradeBounds.min}
-              max={gradeBounds.max}
-              onChange={(v) => push({ gmin: Math.min(v, gmax), gmax })}
-            />
-            <RangeRow
-              label="Max"
-              value={gmax}
-              min={gradeBounds.min}
-              max={gradeBounds.max}
-              onChange={(v) => push({ gmin, gmax: Math.max(v, gmin) })}
-            />
-          </div>
-        </div>
+        <RangePair
+          label="Grade"
+          from={gmin}
+          to={gmax}
+          min={gradeBounds.min}
+          max={gradeBounds.max}
+          fromLabel="Min"
+          toLabel="Max"
+          onCommit={(r) => push({ gmin: r.from, gmax: r.to })}
+        />
 
-        <label className="grid gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--ink-2)" }}>
-            Minimum performances — {minp}
-          </span>
-          <input
-            type="range"
-            aria-label="Minimum performances"
-            min={0}
-            max={200}
-            step={5}
-            value={minp}
-            onChange={(e) => push({ minp: Number(e.target.value) || undefined })}
-          />
-        </label>
+        <RangeSingle
+          label="Minimum performances"
+          value={minp}
+          min={0}
+          max={200}
+          step={5}
+          onCommit={(v) => push({ minp: v || undefined })}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

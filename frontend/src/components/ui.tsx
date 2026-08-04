@@ -193,6 +193,52 @@ export function TableScroll({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Sort control for the card views, which have no column headers to tap.
+ * Hidden from `sm` up, where the sortable table headers take over.
+ */
+export function SortChips<K extends string>({
+  columns,
+  active,
+  dir,
+  hrefFor,
+}: {
+  columns: { key: K; label: string }[];
+  active: K;
+  dir: "asc" | "desc";
+  hrefFor: (key: K) => string;
+}) {
+  return (
+    <div className="sm:hidden -mt-1 mb-3 flex flex-wrap gap-1.5">
+      <span
+        className="tap-sm inline-flex items-center text-[11px] uppercase tracking-wide"
+        style={{ color: "var(--muted)" }}
+      >
+        Sort
+      </span>
+      {columns.map((c) => {
+        const on = c.key === active;
+        return (
+          <Link
+            key={c.key}
+            href={hrefFor(c.key)}
+            aria-current={on ? "true" : undefined}
+            className="tap-sm inline-flex items-center gap-1 rounded-full border px-3 text-[13px] transition"
+            style={{
+              background: on ? "var(--series-1)" : "var(--surface)",
+              color: on ? "#fff" : "var(--ink-2)",
+              borderColor: on ? "var(--series-1)" : "var(--border-strong)",
+            }}
+          >
+            {c.label}
+            {on && <span aria-hidden>{dir === "asc" ? "↑" : "↓"}</span>}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
 /** The phone-sized counterpart to a table: one card per row, stacked. */
 export function DataList({ children }: { children: ReactNode }) {
   return <ul className="grid gap-2 sm:hidden">{children}</ul>;

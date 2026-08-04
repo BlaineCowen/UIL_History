@@ -24,6 +24,7 @@ import {
   EmptyState,
   Pagination,
   SectionTitle,
+  SortChips,
   TableScroll,
 } from "@/components/ui";
 
@@ -98,29 +99,12 @@ export default async function PmlPage({
                   COLUMNS.find((c) => c.key === sort)?.label ?? sort
                 } (${dir === "desc" ? "high to low" : "low to high"})`}
               />
-              {/* The card view has no column headers to click, so sorting
-                  gets its own control below sm. */}
-              <div className="sm:hidden -mt-1 mb-3 flex flex-wrap gap-1.5">
-                {COLUMNS.map((c) => {
-                  const active = sort === c.key;
-                  return (
-                    <Link
-                      key={c.key}
-                      href={sortHref(c.key)}
-                      aria-current={active ? "true" : undefined}
-                      className="tap-sm inline-flex items-center gap-1 rounded-full border px-3 text-[13px] transition"
-                      style={{
-                        background: active ? "var(--series-1)" : "var(--surface)",
-                        color: active ? "#fff" : "var(--ink-2)",
-                        borderColor: active ? "var(--series-1)" : "var(--border-strong)",
-                      }}
-                    >
-                      {c.label}
-                      {active && <span aria-hidden>{dir === "asc" ? "↑" : "↓"}</span>}
-                    </Link>
-                  );
-                })}
-              </div>
+              <SortChips
+                columns={COLUMNS}
+                active={sort}
+                dir={dir}
+                hrefFor={sortHref}
+              />
             </div>
             <div className="px-4 sm:px-5 pb-4 sm:pb-5">
               <TableScroll>

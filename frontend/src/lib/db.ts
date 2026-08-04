@@ -216,8 +216,36 @@ export function countEntries(f: EntryFilters): number {
   return row.n;
 }
 
-export function getEntries(f: EntryFilters, limit: number, offset: number): Entry[] {
+export type EntrySort =
+  | "year"
+  | "school"
+  | "concert_final_score"
+  | "sight_reading_final_score";
+
+/**
+ * Sort expressions, not bare columns. `school` needs both because the scraped
+ * values are neither trimmed nor consistently cased: without TRIM the handful
+ * of " Sam Houston Middle School" rows sort ahead of everything, and without
+ * COLLATE NOCASE binary collation puts "west Brook High School" after every
+ * capitalised name.
+ */
+const ENTRY_ORDER: Record<EntrySort, string> = {
+  year: "year",
+  school: "TRIM(school) COLLATE NOCASE",
+  concert_final_score: "concert_final_score",
+  sight_reading_final_score: "sight_reading_final_score",
+};
+
+export function getEntries(
+  f: EntryFilters,
+  sort: EntrySort,
+  dir: "asc" | "desc",
+  limit: number,
+  offset: number,
+): Entry[] {
   const { sql, params } = buildWhere(f);
+  // Both sides come from the whitelisting EntrySort type, not user input.
+  const order = `${ENTRY_ORDER[sort]} ${dir === "asc" ? "ASC" : "DESC"}`;
   return getDb()
     .prepare(
       `SELECT entry_number, year, contest_date, event, gen_event, school, city,
@@ -226,7 +254,8 @@ export function getEntries(f: EntryFilters, limit: number, offset: number): Entr
               title_1, title_2, title_3, composer_1, composer_2, composer_3,
               code_1, code_2, code_3
        FROM entries ${sql}
-       ORDER BY year DESC, school ASC
+       ORDER BY ${order} NULLS LAST, year DESC, ${ENTRY_ORDER.school} ASC,
+                entry_number ASC
        LIMIT ? OFFSET ?`,
     )
     .all(...params, limit, offset) as Entry[];
@@ -378,14 +407,16 @@ export function getSongs(
 ): Song[] {
   const { sql, params } = buildSongWhere(f);
   // Whitelisted above by the SongSort type; interpolation is safe here.
-  const order = `${sort} ${dir === "asc" ? "ASC" : "DESC"}`;
+  // Titles sort case-insensitively for the same reason school names do.
+  const column = sort === "title" ? "title COLLATE NOCASE" : sort;
+  const order = `${column} ${dir === "asc" ? "ASC" : "DESC"}`;
   return getDb()
     .prepare(
       `SELECT code, event_name, title, composer, arranger, publisher, grade,
               specification, performance_count, average_concert_score,
               average_sight_reading_score, song_score, earliest_year
        FROM songs ${sql}
-       ORDER BY ${order} NULLS LAST, title ASC
+       ORDER BY ${order} NULLS LAST, title COLLATE NOCASE ASC
        LIMIT ? OFFSET ?`,
     )
     .all(...params, limit, offset) as Song[];

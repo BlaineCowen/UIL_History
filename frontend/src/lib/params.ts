@@ -1,4 +1,4 @@
-import type { EntryFilters, SongFilters, SongSort } from "./db";
+import type { EntryFilters, EntrySort, SongFilters, SongSort } from "./db";
 
 /**
  * Filter state lives in the URL, so any view is linkable and shareable --
@@ -57,6 +57,41 @@ export function parseSongFilters(sp: SearchParams): SongFilters {
     accompaniment:
       acc === "acappella" || acc === "accompanied" ? acc : undefined,
   };
+}
+
+const ENTRY_SORTS: EntrySort[] = [
+  "year",
+  "school",
+  "concert_final_score",
+  "sight_reading_final_score",
+];
+
+/**
+ * Ratings are ranks, so "best first" is ascending while "newest first" is
+ * descending. Each column therefore carries its own natural direction rather
+ * than defaulting every column to desc.
+ */
+export const ENTRY_SORT_DEFAULT_DIR: Record<EntrySort, "asc" | "desc"> = {
+  year: "desc",
+  school: "asc",
+  concert_final_score: "asc",
+  sight_reading_final_score: "asc",
+};
+
+export function parseEntrySort(sp: SearchParams): {
+  sort: EntrySort;
+  dir: "asc" | "desc";
+} {
+  const raw = one(sp.sort);
+  const sort = ENTRY_SORTS.includes(raw as EntrySort)
+    ? (raw as EntrySort)
+    : "year";
+  const rawDir = one(sp.dir);
+  const dir =
+    rawDir === "asc" || rawDir === "desc"
+      ? rawDir
+      : ENTRY_SORT_DEFAULT_DIR[sort];
+  return { sort, dir };
 }
 
 const SONG_SORTS: SongSort[] = ["song_score", "performance_count", "title", "grade"];

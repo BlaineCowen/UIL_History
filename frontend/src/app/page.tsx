@@ -9,7 +9,15 @@ import {
   getSummary,
   getYearBounds,
 } from "@/lib/db";
-import { parseEntryFilters, parsePage, buildQuery, type SearchParams } from "@/lib/params";
+import {
+  parseEntryFilters,
+  parseEntrySort,
+  parsePage,
+  buildQuery,
+  ENTRY_SORT_DEFAULT_DIR,
+  type SearchParams,
+} from "@/lib/params";
+import type { EntrySort } from "@/lib/db";
 import { choice, formatNumber, formatScore, pct } from "@/lib/format";
 import { Filters } from "@/components/Filters";
 import { ScoreTrend } from "@/components/charts/ScoreTrend";
@@ -23,11 +31,50 @@ import {
   RatingCell,
   ScoreBadge,
   SectionTitle,
+  SortChips,
   StatTile,
   TableScroll,
 } from "@/components/ui";
 
 const PAGE_SIZE = 50;
+
+const SORT_COLUMNS: { key: EntrySort; label: string }[] = [
+  { key: "year", label: "Year" },
+  { key: "school", label: "School" },
+  { key: "concert_final_score", label: "Concert" },
+  { key: "sight_reading_final_score", label: "SR" },
+];
+
+const SORT_LABELS: Record<EntrySort, string> = {
+  year: "year",
+  school: "school",
+  concert_final_score: "concert rating",
+  sight_reading_final_score: "sight-reading rating",
+};
+
+/** Ratings are ranks, so ascending is "best first" -- worth spelling out. */
+const SORT_DESCRIPTIONS: Record<EntrySort, Record<"asc" | "desc", string>> = {
+  year: { asc: "oldest first", desc: "newest first" },
+  school: { asc: "A to Z", desc: "Z to A" },
+  concert_final_score: { asc: "best first", desc: "worst first" },
+  sight_reading_final_score: { asc: "best first", desc: "worst first" },
+};
+
+/** Column header -> sort key. Headers absent here are not sortable. */
+const SORTABLE = Object.fromEntries(
+  SORT_COLUMNS.map((c) => [c.label, c.key]),
+) as Partial<Record<string, EntrySort>>;
+
+const COLUMNS = [
+  "Year",
+  "Event",
+  "School",
+  "Director",
+  "Class",
+  "Selections",
+  "Concert",
+  "SR",
+];
 
 export default async function ResultsPage({
   searchParams,
@@ -36,15 +83,27 @@ export default async function ResultsPage({
 }) {
   const sp = await searchParams;
   const filters = parseEntryFilters(sp);
+  const { sort, dir } = parseEntrySort(sp);
   const page = parsePage(sp);
   const bounds = getYearBounds();
+
+  /** Re-selecting the active column flips it; a new column starts at its own natural direction. */
+  function sortHref(key: EntrySort) {
+    const nextDir =
+      sort === key
+        ? dir === "asc"
+          ? "desc"
+          : "asc"
+        : ENTRY_SORT_DEFAULT_DIR[key];
+    return `/${buildQuery(sp, { sort: key, dir: nextDir, page: undefined })}`;
+  }
 
   const options = getFilterOptions(filters.genEvent);
   const conferences = getConferences(filters.genEvent, filters.schoolLevel);
 
   const total = countEntries(filters);
   const summary = getSummary(filters);
-  const rows = getEntries(filters, PAGE_SIZE, (page - 1) * PAGE_SIZE);
+  const rows = getEntries(filters, sort, dir, PAGE_SIZE, (page - 1) * PAGE_SIZE);
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // The table and the phone card list render the same three selections, so
@@ -160,9 +219,15 @@ export default async function ResultsPage({
             <div className="p-4 sm:p-5 pb-0">
               <SectionTitle
                 title="Entries"
-                hint={`${formatNumber(total)} matching · showing ${formatNumber(
-                  rows.length,
-                )} on this page`}
+                hint={`${formatNumber(total)} matching · sorted by ${
+                  SORT_LABELS[sort]
+                } (${SORT_DESCRIPTIONS[sort][dir]})`}
+              />
+              <SortChips
+                columns={SORT_COLUMNS}
+                active={sort}
+                dir={dir}
+                hrefFor={sortHref}
               />
             </div>
             <div className="px-4 sm:px-5 pb-4 sm:pb-5">
@@ -170,24 +235,38 @@ export default async function ResultsPage({
                 <table className="w-full text-sm border-separate border-spacing-0">
                   <thead>
                     <tr className="text-left">
-                      {[
-                        "Year",
-                        "Event",
-                        "School",
-                        "Director",
-                        "Class",
-                        "Selections",
-                        "Concert",
-                        "SR",
-                      ].map((h) => (
-                        <th
-                          key={h}
-                          className="whitespace-nowrap border-b py-2 pr-4 text-[11px] font-semibold uppercase tracking-wide"
-                          style={{ color: "var(--muted)" }}
-                        >
-                          {h}
-                        </th>
-                      ))}
+                      {COLUMNS.map((h) => {
+                        const key = SORTABLE[h];
+                        const active = key && sort === key;
+                        return (
+                          <th
+                            key={h}
+                            aria-sort={
+                              active
+                                ? dir === "asc"
+                                  ? "ascending"
+                                  : "descending"
+                                : undefined
+                            }
+                            className="whitespace-nowrap border-b py-2 pr-4 text-[11px] font-semibold uppercase tracking-wide"
+                            style={{ color: active ? "var(--ink)" : "var(--muted)" }}
+                          >
+                            {key ? (
+                              <Link
+                                href={sortHref(key)}
+                                className="inline-flex items-center gap-1 hover:opacity-70"
+                              >
+                                {h}
+                                <span aria-hidden style={{ opacity: active ? 1 : 0.25 }}>
+                                  {active && dir === "asc" ? "↑" : "↓"}
+                                </span>
+                              </Link>
+                            ) : (
+                              h
+                            )}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>

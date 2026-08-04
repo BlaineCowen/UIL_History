@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { buildQuery } from "@/lib/params";
-import { RangeRow } from "@/components/RangeRow";
+import { RangePair } from "@/components/RangeFilter";
 
 type Option = { value: string; label: string; count?: number };
 
@@ -184,29 +184,14 @@ export function Filters(props: FiltersProps) {
               </select>
             </Field>
 
-            {/* Two half-width sliders in one row are a coin-toss to hit with a
-                thumb, so they stack and get their own value labels on phones. */}
-            <div className="grid gap-1.5">
-              <span className="text-xs font-medium" style={{ color: "var(--ink-2)" }}>
-                Years — {from} to {to}
-              </span>
-              <div className="grid gap-1 sm:grid-cols-2 sm:gap-3 sm:items-center">
-                <RangeRow
-                  label="From"
-                  value={from}
-                  min={props.yearBounds.min}
-                  max={props.yearBounds.max}
-                  onChange={(v) => push({ from: Math.min(v, to), to })}
-                />
-                <RangeRow
-                  label="To"
-                  value={to}
-                  min={props.yearBounds.min}
-                  max={props.yearBounds.max}
-                  onChange={(v) => push({ from, to: Math.max(v, from) })}
-                />
-              </div>
-            </div>
+            <RangePair
+              label="Years"
+              from={from}
+              to={to}
+              min={props.yearBounds.min}
+              max={props.yearBounds.max}
+              onCommit={(r) => push({ from: r.from, to: r.to })}
+            />
           </div>
 
           {props.conferences.length > 0 && (
