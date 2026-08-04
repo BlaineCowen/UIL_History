@@ -135,9 +135,14 @@ try {
 
   console.log(`\ndone in ${((Date.now() - started) / 1000).toFixed(1)}s`);
   console.log(
-    "\nNOTE: the app caches every read under the 'contest-data' tag for a day.\n" +
-      "Until a revalidate endpoint exists, redeploy (or restart the server) after\n" +
-      "loading, or the site will keep serving the previous season.",
+    "\nNOTE: the app caches every read under the 'contest-data' tag for a day,\n" +
+      "so this load is invisible until that cache is dropped. Restarting the\n" +
+      "server does NOT do it -- Next's data cache lives in .next/cache and\n" +
+      "survives restarts. Drop it with:\n" +
+      "\n" +
+      "  curl -X POST <site>/api/revalidate -H \"x-revalidate-secret: $REVALIDATE_SECRET\"\n" +
+      "\n" +
+      "or locally, rm -rf .next/cache and restart.",
   );
 } finally {
   await sql.end();
