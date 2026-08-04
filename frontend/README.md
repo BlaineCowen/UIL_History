@@ -11,8 +11,10 @@ state lives in the URL — every view is linkable and shareable.
 
 ## Setup
 
-The app reads `frontend/data/uil_web.db`, which is **generated**, not committed.
-Build it from the repo root:
+The app reads **Postgres**, via `DATABASE_URL`. Getting there is two steps,
+because the cleaning still happens in Python against SQLite.
+
+**1. Build the cleaned SQLite file** (from the repo root):
 
 ```bash
 .venv/bin/python scripts/build_web_db.py
@@ -20,14 +22,31 @@ Build it from the repo root:
 
 That reads `uil.db`, applies the dashboard's own `get_db()` / `clean_pml()`
 cleaning functions (so the two apps agree), and writes a slim indexed database
-of ~160k entries and ~7.8k songs.
+of ~160k entries and ~7.8k songs to `frontend/data/uil_web.db`.
 
-Then, from this directory:
+**2. Load it into Postgres** (from this directory):
+
+```bash
+DATABASE_URL=postgres://... node scripts/load_postgres.mjs
+```
+
+The loader reads the *already cleaned* SQLite output rather than re-deriving
+anything, which makes cleaning drift between the two structurally impossible.
+It only touches `entries` and `songs`, so user tables are never harmed.
+
+For local development, a throwaway Postgres:
+
+```bash
+docker run -d --name uil-pg -e POSTGRES_PASSWORD=uil -e POSTGRES_USER=uil \
+  -e POSTGRES_DB=uil -p 55432:5432 postgres:17
+```
+
+Then:
 
 ```bash
 npm install
-npm run dev      # http://localhost:3000
-npm run build && npm run start
+DATABASE_URL=postgres://uil:uil@localhost:55432/uil npm run dev
+DATABASE_URL=... npm run build && DATABASE_URL=... npm run start
 ```
 
 ## Routes
@@ -49,9 +68,25 @@ npm run build && npm run start
   categories into "Other" or facet instead.
 - Song detail deliberately uses **two charts** rather than one with two y-axes.
   Performance count and average rating are different scales.
-- `src/lib/db.ts` is the only file that touches the database. When the Postgres
-  migration happens, this is the file that changes; the pages call functions,
-  not SQL.
+- `src/lib/db.ts` is the only file that touches the database, which is what made
+  the SQLite→Postgres move a single-file change. Keep it that way.
+- **Every read is cached** under the `contest-data` tag. This is a capacity
+  requirement, not an optimisation: uncached, one unfiltered `/` runs eight
+  queries that each scan the whole 159k-row table, ~139ms of database CPU, about
+  7 views/sec per core. Cached, a repeat view issues **zero** queries.
+  **After loading new data you must invalidate** — redeploy, restart, or call
+  `revalidateTag("contest-data")` — or the site serves the previous season for
+  up to a day.
+- Four SQLite behaviours do not carry over, and three are silent rather than
+  errors: SQLite's `LIKE` is case-insensitive (Postgres needs `ILIKE`);
+  Postgres folds unquoted identifiers, so camelCase aliases must be quoted or
+  `avgConcert` arrives as `avgconcert`; and `COUNT`/`SUM`/`AVG` come back as
+  *strings* unless cast. The two that are hard errors — output aliases in
+  `HAVING`, and bare non-grouped columns — at least fail loudly.
+- **Sort order changed on purpose.** SQLite sorted by raw bytes, so
+  `"Emperor" Variations` was song #1 of 7,832; Postgres's collation ignores
+  leading punctuation and files it at #2134, under E. That is the better
+  behaviour, but it is a visible difference.
 - **Every table renders twice**: `TableScroll` for `sm` and up, `DataList` /
   `DataCard` below it. The rows are derived once and both views consume them,
   so a new column needs adding in two places. This costs ~15KB gzipped per

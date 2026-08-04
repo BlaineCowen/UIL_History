@@ -27,7 +27,7 @@ type Props = { params: Promise<{ code: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { code } = await params;
-  const song = getSong(decodeURIComponent(code));
+  const song = await getSong(decodeURIComponent(code));
   if (!song) return { title: "Song not found" };
   return {
     title: song.title,
@@ -37,14 +37,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function SongPage({ params }: Props) {
   const { code } = await params;
-  const song = getSong(decodeURIComponent(code));
+  const song = await getSong(decodeURIComponent(code));
   if (!song) notFound();
 
-  const summary = getSongSummary(song.code);
-  const yearly = getSongYearly(song.code);
-  const performances = getSongPerformances(song.code);
-  const share = getSongShare(song.code, song.event_name, song.grade);
-  const topSchools = getSongTopSchools(song.code);
+  const summary = await getSongSummary(song.code);
+  const yearly = await getSongYearly(song.code);
+  const performances = await getSongPerformances(song.code);
+  const share = await getSongShare(song.code, song.event_name, song.grade);
+  const topSchools = await getSongTopSchools(song.code);
 
   const neverPerformed = summary.performances === 0;
 

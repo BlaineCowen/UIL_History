@@ -54,10 +54,10 @@ export default async function PmlPage({
   const { sort, dir } = parseSongSort(sp);
   const page = parsePage(sp);
 
-  const events = getSongEvents();
-  const total = countSongs(filters);
-  const rows = getSongs(filters, sort, dir, PAGE_SIZE, (page - 1) * PAGE_SIZE);
-  const scatter = getSongScatter(filters, Math.max(10, filters.minPerformances ?? 0));
+  const events = await getSongEvents();
+  const total = await countSongs(filters);
+  const rows = await getSongs(filters, sort, dir, PAGE_SIZE, (page - 1) * PAGE_SIZE);
+  const scatter = await getSongScatter(filters, Math.max(10, filters.minPerformances ?? 0));
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function sortHref(key: SongSort) {

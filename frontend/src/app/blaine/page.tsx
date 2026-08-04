@@ -78,7 +78,7 @@ export default async function BlainePage({
   const filters = parseEntryFilters(sp, { director: true });
   const { sort, dir } = parseEntrySort(sp);
   const page = parsePage(sp);
-  const bounds = getYearBounds();
+  const bounds = await getYearBounds();
 
   function sortHref(key: EntrySort) {
     const nextDir =
@@ -90,13 +90,13 @@ export default async function BlainePage({
     return `/blaine${buildQuery(sp, { sort: key, dir: nextDir, page: undefined })}`;
   }
 
-  const options = getFilterOptions(filters.genEvent);
-  const conferences = getConferences(filters.genEvent, filters.schoolLevel);
+  const options = await getFilterOptions(filters.genEvent);
+  const conferences = await getConferences(filters.genEvent, filters.schoolLevel);
 
-  const total = countEntries(filters);
-  const summary = getSummary(filters);
-  const roles = countDirectorRoles(filters);
-  const rows = getEntriesWithJudges(
+  const total = await countEntries(filters);
+  const summary = await getSummary(filters);
+  const roles = await countDirectorRoles(filters);
+  const rows = await getEntriesWithJudges(
     filters,
     sort,
     dir,
