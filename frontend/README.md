@@ -52,6 +52,16 @@ npm run build && npm run start
 - `src/lib/db.ts` is the only file that touches the database. When the Postgres
   migration happens, this is the file that changes; the pages call functions,
   not SQL.
+- **Every table renders twice**: `TableScroll` for `sm` and up, `DataList` /
+  `DataCard` below it. The rows are derived once and both views consume them,
+  so a new column needs adding in two places. This costs ~15KB gzipped per
+  page and buys not reading an 8-column table through a 390px window.
+- Anything a finger touches needs 44px (`.tap`) or 38px (`.tap-sm`), and any
+  focusable control needs 16px text on coarse pointers — under that, iOS
+  Safari zooms the viewport on focus and never zooms back out.
+- Charts can't size their axes in CSS because Recharts lays out in JS. Use
+  `useIsNarrow()` from `ChartKit` for tick density and bubble scale; use the
+  `heightClass` prop for height.
 - The connection is opened **readonly**, so no pragma that writes to the file
   (`journal_mode`) can be set on it.
 
