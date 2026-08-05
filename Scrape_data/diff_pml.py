@@ -42,12 +42,19 @@ def load_edition(db, label):
         raise SystemExit(f"No edition {label!r}. Stored: {', '.join(have) or '(none)'}")
     entries = defaultdict(list)
     for r in db.execute(
-        "SELECT song_id, code, grade, event, title, composer FROM pml_entries"
+        "SELECT song_id, code, grade, event, title, composer, arranger FROM pml_entries"
         " WHERE edition_id = ?",
         (row[0],),
     ):
         entries[r[0]].append(
-            {"code": r[1], "grade": r[2], "event": r[3], "title": r[4], "composer": r[5]}
+            {
+                "code": r[1],
+                "grade": r[2],
+                "event": r[3],
+                "title": r[4],
+                "composer": r[5],
+                "arranger": r[6],
+            }
         )
     return entries
 
@@ -61,7 +68,8 @@ def load_songs(path):
     db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     out = {}
     for r in db.execute(
-        "SELECT code, title, composer, grade, event_name, performance_count FROM songs"
+        "SELECT code, title, composer, grade, event_name, performance_count, arranger"
+        " FROM songs"
     ):
         out[str(r[0])] = {
             "code": str(r[0]),
@@ -70,6 +78,7 @@ def load_songs(path):
             "grade": r[3],
             "event": r[4],
             "performances": r[5] or 0,
+            "arranger": r[6],
         }
     db.close()
     return out
@@ -88,24 +97,58 @@ def reconcile(missing, old_side, new_side):
     entry -- so a re-code requires title *and* composer to agree.
     """
     by_title_composer = defaultdict(list)
+    by_title_arranger = defaultdict(list)
     by_title = defaultdict(list)
     for song_id, rows in new_side.items():
         r = rows[0]
         by_title_composer[(norm(r["title"]), norm(r["composer"]))].append((song_id, r))
         by_title[norm(r["title"])].append((song_id, r))
+        if norm(r.get("arranger")):
+            by_title_arranger[
+                (norm(r["title"]), norm(r.get("arranger")), r["grade"])
+            ].append((song_id, r))
 
     recoded, review, delisted = [], [], []
     for song_id in missing:
         old = old_side[song_id][0] if isinstance(old_side[song_id], list) else old_side[song_id]
+
         strong = by_title_composer.get((norm(old["title"]), norm(old["composer"])), [])
         if strong:
             recoded.append((song_id, old, strong[0]))
             continue
-        weak = by_title.get(norm(old["title"]), [])
-        if weak:
-            review.append((song_id, old, weak))
+
+        # Composer attribution drifts on traditional material -- "Dawson"
+        # becomes composer "Traditional Spiritual" with Dawson as *arranger*,
+        # and "Traditional" becomes "Anon. or Trad.". Title plus arranger plus
+        # grade is a tighter key than title plus composer in those cases, and
+        # it resolved both pieces that previously needed a human: grade alone
+        # separates the grade-4 "Soon-Ah Will Be Done" from the grade-5
+        # Tenor-Bass setting sharing its title. Event is deliberately NOT in
+        # the key -- the live feed says "Band" where songs says "Concert
+        # Band", so including it would silently exclude every band piece.
+        # Requiring exactly one candidate keeps a collision going to review.
+        # Try our arranger, then our *composer*, against their arranger. The
+        # second covers the commonest form of this drift: the name is demoted
+        # from composer to arranger when UIL re-credits a traditional work to
+        # "Traditional Spiritual". "Soon-Ah Will Be Done" is exactly that --
+        # ours has Dawson as composer with no arranger, theirs has Dawson as
+        # arranger -- so an arranger-to-arranger key alone cannot see it.
+        for candidate_name in (norm(old.get("arranger")), norm(old.get("composer"))):
+            if not candidate_name:
+                continue
+            byarr = by_title_arranger.get(
+                (norm(old["title"]), candidate_name, old.get("grade")), []
+            )
+            if len(byarr) == 1:
+                recoded.append((song_id, old, byarr[0]))
+                break
         else:
-            delisted.append((song_id, old))
+            weak = by_title.get(norm(old["title"]), [])
+            if weak:
+                review.append((song_id, old, weak))
+            else:
+                delisted.append((song_id, old))
+        continue
     return recoded, review, delisted
 
 
@@ -121,6 +164,11 @@ def main() -> int:
     )
     ap.add_argument("--songs-db", default=DEFAULT_SONGS_DB)
     ap.add_argument("--csv", help="Directory to write added/recoded/review/delisted CSVs")
+    ap.add_argument(
+        "--apply-recodes",
+        action="store_true",
+        help="Repoint results.code_N from the old id to the re-coded one",
+    )
     args = ap.parse_args()
 
     if not args.frm and not args.against_songs:
@@ -220,6 +268,22 @@ def main() -> int:
         write("delisted.csv", ["song_id", "title", "composer", "performances"],
               [[i, o["title"], o["composer"], o.get("performances", 0)] for i, o in delisted])
         print(f"\n  wrote CSVs to {args.csv}/")
+
+    if args.apply_recodes and recoded:
+        # Without this the history is stranded: Lux Aeterna's 308 performances
+        # stay attached to a code that is no longer on the list, and the piece
+        # shows as delisted while its replacement shows as never performed.
+        write = sqlite3.connect(args.db)
+        moved = 0
+        for old_id, _old, (new_id, _new) in recoded:
+            for n in (1, 2, 3):
+                moved += write.execute(
+                    f"UPDATE results SET code_{n} = ? WHERE code_{n} = ?",
+                    (new_id, old_id),
+                ).rowcount
+        write.commit()
+        write.close()
+        print(f"\n  repointed {moved:,} result slots onto their re-coded ids")
 
     if added:
         print(

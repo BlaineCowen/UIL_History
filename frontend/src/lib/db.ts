@@ -213,6 +213,12 @@ export type Song = {
   average_sight_reading_score: number;
   song_score: number;
   earliest_year: string;
+  /** 0 when the piece has left the PML -- it keeps its history either way. */
+  on_current_pml: number;
+  /** Its grade in the previous edition, when that differs from now. */
+  previous_grade: number | null;
+  /** Which edition it changed from, so the note can say when. */
+  grade_changed_from: string | null;
 };
 
 /* --------------------------------------------------------------- helpers */
@@ -553,6 +559,12 @@ export type SongFilters = {
   search?: string;
   minPerformances?: number;
   accompaniment?: "accompanied" | "acappella";
+  /**
+   * Delisted pieces are excluded by default: a director browsing for
+   * repertoire cannot programme them. They stay reachable by URL, and by
+   * setting this, because their contest history is still worth reading.
+   */
+  includeDelisted?: boolean;
 };
 
 function buildSongWhere(f: SongFilters): Where {
@@ -583,6 +595,9 @@ function buildSongWhere(f: SongFilters): Where {
   // ILIKE, not LIKE: `specification` is raw source text of mixed case, and
   // SQLite's LIKE matched it case-insensitively. Plain LIKE here silently
   // returned nothing.
+  if (!f.includeDelisted) {
+    clauses.push("on_current_pml = 1");
+  }
   if (f.accompaniment === "acappella") {
     clauses.push("specification ILIKE '%a cappella%'");
   } else if (f.accompaniment === "accompanied") {
@@ -626,7 +641,8 @@ async function _getSongs(
   return rows<Song>(
     `SELECT code, event_name, title, composer, arranger, publisher, grade,
             specification, performance_count, average_concert_score,
-            average_sight_reading_score, song_score, earliest_year
+            average_sight_reading_score, song_score, earliest_year,
+            on_current_pml, previous_grade, grade_changed_from
      FROM songs ${sql}
      ORDER BY ${order} NULLS LAST, lower(title) ASC
      LIMIT ? OFFSET ?`,
@@ -662,7 +678,8 @@ async function _getSong(code: string): Promise<Song | undefined> {
   return first<Song | undefined>(
     `SELECT code, event_name, title, composer, arranger, publisher, grade,
             specification, performance_count, average_concert_score,
-            average_sight_reading_score, song_score, earliest_year
+            average_sight_reading_score, song_score, earliest_year,
+            on_current_pml, previous_grade, grade_changed_from
      FROM songs WHERE code = ?`,
     [code],
   );

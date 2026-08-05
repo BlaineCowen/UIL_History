@@ -706,7 +706,18 @@ def main():
     dropped = len(df) - len(df_processed)
     if "entry_number" in df.columns and "entry_number" in df_processed.columns:
         full = df.set_index("entry_number")
-        calc = df_processed.set_index("entry_number")
+        calc = df_processed.set_index("entry_number").copy()
+
+        # adjust_results_df parses contest_date into datetime64. Writing those
+        # values into `full`'s object column via update() yields a column of
+        # Timestamp objects, which sqlite3 cannot bind ("type 'Timestamp' is
+        # not supported") -- and because to_sql(if_exists="replace") drops the
+        # table before inserting, that failure empties results entirely.
+        # Render datetimes back to strings first, matching how they are stored.
+        for col in calc.columns:
+            if pd.api.types.is_datetime64_any_dtype(calc[col]):
+                calc[col] = calc[col].dt.strftime("%Y-%m-%d")
+
         for col in calc.columns:
             if col not in full.columns:
                 full[col] = pd.NA
@@ -714,6 +725,15 @@ def main():
         # missing from `calc` keep everything they came in with.
         full.update(calc)
         df_to_save = full.reset_index()
+
+        # Belt and braces: anything still holding Timestamps would take the
+        # table down on write, so stringify it rather than discover it later.
+        for col in df_to_save.columns:
+            if df_to_save[col].dtype == object:
+                if df_to_save[col].map(lambda v: isinstance(v, pd.Timestamp)).any():
+                    df_to_save[col] = df_to_save[col].map(
+                        lambda v: v.strftime("%Y-%m-%d") if isinstance(v, pd.Timestamp) else v
+                    )
         df_to_save = df_to_save[[c for c in columns_to_save if c in df_to_save.columns]]
         if dropped > 0:
             print(
@@ -740,11 +760,40 @@ def main():
 
     conn = sqlite3.connect(db_path)
     try:
-        print(f"Saving updated results table to {db_path} (Columns: {columns_to_save})...")
-        df_to_save.to_sql("results", conn, if_exists="replace", index=False)
-        print("Results table updated successfully with performance_delta_score.")
+        print(f"Saving updated results table to {db_path} ({len(columns_to_save)} columns)...")
+        # Write to a staging table and swap, rather than to_sql(replace) on the
+        # live table. `replace` DROPs first, so any failure during the insert --
+        # a bad dtype, a full disk, an interrupt -- leaves results empty. That
+        # is not hypothetical: an unbindable Timestamp emptied all 173,600 rows
+        # this way. Here a failure leaves the original table untouched.
+        df_to_save.to_sql("results_staging", conn, if_exists="replace", index=False)
+
+        staged = conn.execute("SELECT COUNT(*) FROM results_staging").fetchone()[0]
+        if staged != len(df_to_save):
+            raise RuntimeError(
+                f"staging holds {staged:,} rows but {len(df_to_save):,} were written"
+            )
+        live = conn.execute("SELECT COUNT(*) FROM results").fetchone()[0]
+        if staged < live:
+            raise RuntimeError(
+                f"refusing to swap: staging {staged:,} rows < live {live:,}"
+            )
+
+        conn.execute("DROP TABLE IF EXISTS results_previous")
+        conn.execute("ALTER TABLE results RENAME TO results_previous")
+        conn.execute("ALTER TABLE results_staging RENAME TO results")
+        conn.commit()
+        conn.execute("DROP TABLE results_previous")
+        conn.commit()
+        print(f"Results table updated successfully ({staged:,} rows).")
     except Exception as e:
         print(f"Error saving updated results table: {e}")
+        print("  The original results table was left intact.")
+        try:
+            conn.execute("DROP TABLE IF EXISTS results_staging")
+            conn.commit()
+        except Exception:
+            pass
     finally:
         if conn: conn.close() # Ensure connection is closed
     # ---------------------------------------

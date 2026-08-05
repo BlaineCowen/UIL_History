@@ -23,6 +23,7 @@ import {
   DataList,
   EmptyState,
   Pagination,
+  PmlStatus,
   SectionTitle,
   SortChips,
   TableScroll,
@@ -151,7 +152,13 @@ export default async function PmlPage({
                             className="font-medium underline decoration-transparent hover:decoration-inherit underline-offset-2 transition"
                           >
                             {s.title}
-                          </Link>
+                          </Link>{" "}
+                          <PmlStatus
+                            compact
+                            onCurrent={s.on_current_pml}
+                            previousGrade={s.previous_grade}
+                            grade={s.grade}
+                          />
                           <div className="text-[12px]" style={{ color: "var(--muted)" }}>
                             {s.composer}
                             {s.arranger ? ` · arr. ${s.arranger}` : ""}
@@ -186,7 +193,15 @@ export default async function PmlPage({
                 {rows.map((s) => (
                   <DataCard key={s.code} href={`/pml/${encodeURIComponent(s.code)}`}>
                     <div>
-                      <p className="font-medium leading-snug">{s.title}</p>
+                      <p className="font-medium leading-snug">
+                        {s.title}{" "}
+                        <PmlStatus
+                          compact
+                          onCurrent={s.on_current_pml}
+                          previousGrade={s.previous_grade}
+                          grade={s.grade}
+                        />
+                      </p>
                       <p
                         className="text-[12px] mt-0.5"
                         style={{ color: "var(--muted)" }}

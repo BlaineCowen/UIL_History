@@ -330,6 +330,84 @@ export function JudgeScores({
   );
 }
 
+/**
+ * "No longer on the PML" and "re-graded" notices.
+ *
+ * Delisting is deliberately not a deletion: a piece can carry hundreds of
+ * performances and still be unprogrammable, and that history is the reason
+ * someone would look it up. The Maiden in the Tower has 109 performances
+ * across 2005-2026 and is off the current list.
+ */
+export function PmlStatus({
+  onCurrent,
+  previousGrade,
+  grade,
+  changedFrom,
+  compact = false,
+}: {
+  onCurrent: number | null | undefined;
+  previousGrade?: number | null;
+  grade?: number | null;
+  changedFrom?: string | null;
+  compact?: boolean;
+}) {
+  const delisted = onCurrent === 0;
+  const regraded =
+    previousGrade != null && grade != null && previousGrade !== grade;
+  if (!delisted && !regraded) return null;
+
+  if (compact) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        {delisted && (
+          <span
+            className="rounded px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
+            style={{ background: "var(--surface-2)", color: "var(--muted)" }}
+          >
+            Delisted
+          </span>
+        )}
+        {regraded && (
+          <span
+            className="tnum rounded px-1.5 py-px text-[10px] font-semibold"
+            style={{ background: "var(--surface-2)", color: "var(--ink-2)" }}
+          >
+            {previousGrade}→{grade}
+          </span>
+        )}
+      </span>
+    );
+  }
+
+  return (
+    <div className="grid gap-2">
+      {delisted && (
+        <div
+          className="rounded-lg border px-3 py-2 text-sm"
+          style={{ background: "var(--surface-2)", color: "var(--ink-2)" }}
+        >
+          <strong>No longer on the Prescribed Music List.</strong> It cannot be
+          programmed for contest now, but its performance history is below.
+        </div>
+      )}
+      {regraded && (
+        <div
+          className="rounded-lg border px-3 py-2 text-sm"
+          style={{ background: "var(--surface-2)", color: "var(--ink-2)" }}
+        >
+          <strong>
+            Re-graded from {previousGrade} to {grade}
+          </strong>
+          {changedFrom ? ` since the ${changedFrom} list.` : "."}{" "}
+          {previousGrade != null && grade != null && grade > previousGrade
+            ? "UIL now considers it harder than it did."
+            : "UIL now considers it easier than it did."}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** A label/value line inside a DataCard. */
 export function CardRow({
   label,

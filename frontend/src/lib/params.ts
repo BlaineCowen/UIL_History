@@ -65,6 +65,9 @@ export function parseSongFilters(sp: SearchParams): SongFilters {
     minPerformances: num(sp.minp),
     accompaniment:
       acc === "acappella" || acc === "accompanied" ? acc : undefined,
+    // Off by default: a director browsing repertoire cannot programme a
+    // delisted piece. `?delisted=1` brings them back.
+    includeDelisted: one(sp.delisted) === "1",
   };
 }
 
