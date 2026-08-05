@@ -102,7 +102,86 @@ SONG_COLUMNS = [
     "song_search",
     "composer_search",
     "total_search",
+    # Derived from the stored PML editions -- see attach_pml_status.
+    "on_current_pml",
+    "previous_grade",
+    "grade_changed_from",
 ]
+
+def attach_pml_status(pml_df):
+    """Mark each song against the stored PML editions.
+
+    Adds three columns:
+      on_current_pml     1 if present in the newest edition, else 0
+      previous_grade     its grade in the preceding edition, when it differs
+      grade_changed_from that edition's label, so the UI can say when
+
+    A song absent from the newest edition has been delisted -- it keeps all its
+    contest history and stays reachable, it simply cannot be programmed now.
+    If no editions have been fetched yet, everything is treated as current so
+    the site never invents a delisting from missing data.
+    """
+    pml_df["on_current_pml"] = 1
+    pml_df["previous_grade"] = None
+    pml_df["grade_changed_from"] = None
+
+    # Own connection: the caller closes its handle before this runs, and
+    # depending on that ordering is how this broke the first time.
+    src = sqlite3.connect(f"file:{SOURCE_DB}?mode=ro", uri=True)
+    try:
+        # Ordered by label, not id: editions can be ingested out of order --
+        # the 2019 backfill was loaded after the current list, and ordering by
+        # insertion would have made 2019 "newest" and inverted every change.
+        # Labels are year-first ("2019-03", "2025-2026") so they sort right.
+        editions = src.execute(
+            "SELECT id, label FROM pml_editions ORDER BY label"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        print("  no pml_editions table -- skipping delisting/grade history")
+        src.close()
+        return pml_df
+    if not editions:
+        src.close()
+        print("  no PML editions stored -- skipping delisting/grade history")
+        return pml_df
+
+    newest_id, newest_label = editions[-1]
+    current = {
+        str(r[0]): r[1]
+        for r in src.execute(
+            "SELECT song_id, MIN(grade) FROM pml_entries WHERE edition_id = ?"
+            " GROUP BY song_id",
+            (newest_id,),
+        )
+    }
+    codes = pml_df["code"].astype(str).str.strip()
+    pml_df["on_current_pml"] = codes.isin(current).astype(int)
+
+    if len(editions) > 1:
+        prev_id, prev_label = editions[-2]
+        previous = {
+            str(r[0]): r[1]
+            for r in src.execute(
+                "SELECT song_id, MIN(grade) FROM pml_entries WHERE edition_id = ?"
+                " GROUP BY song_id",
+                (prev_id,),
+            )
+        }
+        # Coerce both sides: pandas reads pml.grade as float (NaNs elsewhere in
+        # the column), while the edition stores int. Comparing them directly
+        # reported 90 "re-grades" that were really 2.0 vs 2.
+        prev_series = pd.to_numeric(codes.map(previous), errors="coerce")
+        now_series = pd.to_numeric(codes.map(current), errors="coerce")
+        changed = prev_series.notna() & now_series.notna() & (prev_series != now_series)
+        pml_df.loc[changed, "previous_grade"] = prev_series[changed].astype(int)
+        pml_df.loc[changed, "grade_changed_from"] = prev_label
+        print(f"  PML: {int(changed.sum())} songs re-graded since {prev_label}")
+
+    delisted = int((pml_df["on_current_pml"] == 0).sum())
+    print(f"  PML: {len(current):,} on the {newest_label} list, {delisted:,} delisted")
+    src.close()
+    return pml_df
+
 
 EVENT_PREFIX = re.compile(r"^\s*\d+\s*-\s*")
 
@@ -191,6 +270,7 @@ def build() -> None:
     print("Applying the dashboard's cleaning functions ...")
     results_df = get_db(results_df)
     pml_df = clean_pml(pml_df)
+    pml_df = attach_pml_status(pml_df)
 
     # Mirror get_data(): drop partial-score entries, clamp sight-reading.
     score_cols = [

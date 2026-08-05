@@ -16,6 +16,7 @@ import {
   Card,
   DataCard,
   DataList,
+  PmlStatus,
   RatingCell,
   ScoreBadge,
   SectionTitle,
@@ -76,6 +77,12 @@ export default async function SongPage({ params }: Props) {
           {song.arranger ? ` · arranged by ${song.arranger}` : ""}
           {song.publisher ? ` · ${song.publisher}` : ""}
         </p>
+        <PmlStatus
+          onCurrent={song.on_current_pml}
+          previousGrade={song.previous_grade}
+          grade={song.grade}
+          changedFrom={song.grade_changed_from}
+        />
       </header>
 
       {neverPerformed ? (

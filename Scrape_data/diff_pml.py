@@ -164,6 +164,11 @@ def main() -> int:
     )
     ap.add_argument("--songs-db", default=DEFAULT_SONGS_DB)
     ap.add_argument("--csv", help="Directory to write added/recoded/review/delisted CSVs")
+    ap.add_argument(
+        "--apply-recodes",
+        action="store_true",
+        help="Repoint results.code_N from the old id to the re-coded one",
+    )
     args = ap.parse_args()
 
     if not args.frm and not args.against_songs:
@@ -263,6 +268,22 @@ def main() -> int:
         write("delisted.csv", ["song_id", "title", "composer", "performances"],
               [[i, o["title"], o["composer"], o.get("performances", 0)] for i, o in delisted])
         print(f"\n  wrote CSVs to {args.csv}/")
+
+    if args.apply_recodes and recoded:
+        # Without this the history is stranded: Lux Aeterna's 308 performances
+        # stay attached to a code that is no longer on the list, and the piece
+        # shows as delisted while its replacement shows as never performed.
+        write = sqlite3.connect(args.db)
+        moved = 0
+        for old_id, _old, (new_id, _new) in recoded:
+            for n in (1, 2, 3):
+                moved += write.execute(
+                    f"UPDATE results SET code_{n} = ? WHERE code_{n} = ?",
+                    (new_id, old_id),
+                ).rowcount
+        write.commit()
+        write.close()
+        print(f"\n  repointed {moved:,} result slots onto their re-coded ids")
 
     if added:
         print(
