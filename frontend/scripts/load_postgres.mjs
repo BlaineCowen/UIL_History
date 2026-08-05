@@ -142,7 +142,10 @@ try {
       "\n" +
       "  curl -X POST <site>/api/revalidate -H \"x-revalidate-secret: $REVALIDATE_SECRET\"\n" +
       "\n" +
-      "or locally, rm -rf .next/cache and restart.",
+      "or locally, rm -rf .next/cache and restart.\n" +
+      "\nThen warm it, or the first visitor to each view pays the cold cost\n" +
+      "(measured: 1.4-4.0s for an ensemble switch, ~20ms once warm):\n" +
+      "\n  node scripts/warm_cache.mjs https://uilpml.com",
   );
 } finally {
   await sql.end();
