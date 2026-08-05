@@ -2,15 +2,40 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NavLinks } from "@/components/NavLinks";
+import { SiteStructuredData } from "@/components/StructuredData";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  // Required for canonical/OG URLs to resolve absolutely. Without it Next
+  // emits relative URLs and crawlers resolve them against whatever host
+  // served the page -- including preview deployments.
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "UIL History — Texas Concert & Sight-Reading results",
-    template: "%s · UIL History",
+    default: "Texas UIL Prescribed Music List (PML) & Contest Results",
+    template: `%s · ${SITE_NAME}`,
   },
-  description:
-    "Explore two decades of Texas UIL Concert & Sight-Reading contest results and the Prescribed Music List.",
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    "UIL PML",
+    "Texas UIL prescribed music list",
+    "UIL music list",
+    "UIL concert and sight-reading",
+    "UIL contest results",
+    "Texas UIL band music",
+    "UIL choir music list",
+  ],
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    locale: "en_US",
+    url: SITE_URL,
+    title: "Texas UIL Prescribed Music List (PML) & Contest Results",
+    description: SITE_DESCRIPTION,
+  },
+  twitter: { card: "summary_large_image" },
+  alternates: { canonical: "/" },
 };
 
 /**
@@ -47,6 +72,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <SiteStructuredData />
       </head>
       <body className="min-h-screen flex flex-col">
         <header className="sticky top-0 z-30 border-b backdrop-blur-md bg-[color-mix(in_srgb,var(--page)_88%,transparent)]">
