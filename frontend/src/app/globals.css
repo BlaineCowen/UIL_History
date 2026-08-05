@@ -131,6 +131,41 @@ summary {
   font-variant-numeric: tabular-nums;
 }
 
+/* --- loading skeletons ---------------------------------------------------
+   Every data route is dynamically rendered, so a navigation waits on the
+   server before the browser paints anything. These are what a loading.tsx
+   shows in the meantime. A sweep rather than a pulse: it reads as "loading"
+   instead of "broken", and it stops for reduced-motion users below. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--muted) 14%, transparent),
+    transparent
+  );
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+  }
+}
+
 /* --- form controls ------------------------------------------------------ */
 
 .field {
