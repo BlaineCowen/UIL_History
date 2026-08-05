@@ -222,6 +222,19 @@ def fuzzy_search(
     title, composer_first, composer_match, composer_no_hyphen, arranger, event_name, pml
 ):
 
+    # Normalise before testing. The scraped `event` is not consistent between
+    # seasons: 2023/2024/2026 store "concert band", but 2025 stores
+    # "100-Concert Band" -- the UIL form number, and title case. The tests
+    # below are case-sensitive substring checks, so "band" in "100-Concert
+    # Band" is False, the filter then looks for the literal "100-Concert Band"
+    # in the PML, matches nothing, and every 2025 row returned not_found before
+    # a single title was compared. That is the whole of the 27% match rate for
+    # 2025 against 58-61% either side of it.
+    event_name = str(event_name or "").lower()
+    event_name = re.sub(r"^\s*\d+\s*-\s*", "", event_name)  # drop "100-" etc.
+    event_name = event_name.replace("/", "-")  # "tenor/bass" -> "tenor-bass"
+    event_name = event_name.strip()
+
     if "orchestra" in event_name:
         event_name = "orchestra"
 
@@ -342,25 +355,27 @@ def process_row_exact(args):
             code = None
             continue
 
+        # Look the memo up with an indexed query instead of reading the whole
+        # unique_entries table into a DataFrame for every slot.
+        #
+        # The old version opened a connection, read all ~85k rows, and built a
+        # boolean mask -- per slot, under a global lock shared by all workers.
+        # That serialised the pool and got slower as the table grew, decaying
+        # from ~21 slots/sec to ~5. This is the same lookup as one indexed
+        # SELECT, and needs no lock: SQLite handles concurrent readers.
         try:
-            lock.acquire()
             conn = sqlite3.connect("uil.db")
-            unique_entries = pd.read_sql("SELECT * FROM unique_entries", conn)
-            lock.release()
+            hit = conn.execute(
+                "SELECT code FROM unique_entries"
+                " WHERE title = ? AND event = ?"
+                "   AND (composer = ? OR composer = ? OR composer_no_hyphen = ?)"
+                " LIMIT 1",
+                (title, event, composer_first, composer_match, composer_no_hyphen),
+            ).fetchone()
+            conn.close()
 
-            # check if the entry is already in the unique_entries table
-            mask = (
-                (unique_entries["title"] == title)
-                & (
-                    (unique_entries["composer"] == composer_first)
-                    | (unique_entries["composer"] == composer_match)
-                    | (unique_entries["composer_no_hyphen"] == composer_no_hyphen)
-                )
-                & (unique_entries["event"] == event)
-            )
-
-            if not unique_entries[mask].empty:
-                code = unique_entries[mask]["code"].iloc[0]
+            if hit:
+                code = hit[0]
                 update_db(code, i, entry_number, lock)
                 continue
 
