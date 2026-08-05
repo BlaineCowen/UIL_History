@@ -9,7 +9,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { AXIS_PROPS, ChartFrame, GRID_PROPS, Legend, SERIES, TooltipShell } from "./ChartKit";
+import {
+  AXIS_PROPS,
+  ChartFrame,
+  GRID_PROPS,
+  Legend,
+  ratingAxis,
+  SERIES,
+  TooltipShell,
+} from "./ChartKit";
 import type { YearPoint } from "@/lib/db";
 
 type Props = {
@@ -43,6 +51,10 @@ export function ScoreTrend({
     byYear.set(p.year, row);
   }
   const data = [...byYear.values()].sort((a, b) => a.year - b.year);
+
+  // Fit the axis to both plotted series, so the two charts on the page do not
+  // silently use different scales when only one is narrow.
+  const axis = ratingAxis(data.flatMap((d) => [d.selected, showBaseline ? d.all : null]));
 
   const legendItems = [
     { label: "Selected", color: SERIES[0], shape: "line" as const },
@@ -78,8 +90,8 @@ export function ScoreTrend({
           <YAxis
             {...AXIS_PROPS}
             reversed
-            domain={[1, 5]}
-            ticks={[1, 2, 3, 4, 5]}
+            domain={axis.domain}
+            ticks={axis.ticks}
             width={44}
           />
           <Tooltip
