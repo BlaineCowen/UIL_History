@@ -118,6 +118,31 @@ export function useIsNarrow(): boolean {
   );
 }
 
+/**
+ * Y-axis bounds for a rating chart, fitted to the data.
+ *
+ * Ratings are ranks: 1 is the best possible, so the top of the axis stays
+ * pinned at 1 rather than floating to the data's minimum. Only the bottom
+ * moves, to the worst value rounded up -- yearly averages land between 1.15
+ * and 1.75, so a fixed 1-5 axis spent about 80% of its height on empty space
+ * and flattened every real movement into a straight line.
+ *
+ * Pinning the top matters: this is not a truncated axis that exaggerates
+ * differences, because the scale still starts at the true best score. It just
+ * stops drawing range the data never reaches.
+ */
+export function ratingAxis(values: (number | null | undefined)[]) {
+  const present = values.filter(
+    (v): v is number => typeof v === "number" && Number.isFinite(v),
+  );
+  // At least 2, so a dataset of straight ones cannot collapse the axis to a
+  // single point, and so one-tick charts still read as a scale.
+  const worst = present.length ? Math.max(...present) : 5;
+  const bottom = Math.min(5, Math.max(2, Math.ceil(worst)));
+  const ticks = Array.from({ length: bottom }, (_, i) => i + 1);
+  return { domain: [1, bottom] as [number, number], ticks };
+}
+
 export function ChartFrame({
   title,
   hint,

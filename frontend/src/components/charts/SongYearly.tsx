@@ -11,7 +11,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { AXIS_PROPS, ChartFrame, GRID_PROPS, Legend, SERIES, TooltipShell } from "./ChartKit";
+import {
+  AXIS_PROPS,
+  ChartFrame,
+  GRID_PROPS,
+  Legend,
+  ratingAxis,
+  SERIES,
+  TooltipShell,
+} from "./ChartKit";
 
 type Row = { year: number; performances: number; concert: number; sight: number };
 
@@ -22,6 +30,9 @@ type Row = { year: number; performances: number; concert: number; sight: number 
  */
 export function SongYearly({ data }: { data: Row[] }) {
   if (!data.length) return null;
+
+  // Both series share one axis, so fit to whichever reaches further.
+  const axis = ratingAxis(data.flatMap((d) => [d.concert, d.sight]));
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -84,8 +95,8 @@ export function SongYearly({ data }: { data: Row[] }) {
             <YAxis
               {...AXIS_PROPS}
               reversed
-              domain={[1, 5]}
-              ticks={[1, 2, 3, 4, 5]}
+              domain={axis.domain}
+              ticks={axis.ticks}
               width={40}
             />
             <Tooltip
