@@ -30,9 +30,22 @@ import {
 } from "@/components/ui";
 
 export const metadata: Metadata = {
-  title: "Prescribed Music List",
+  // Titled for the search, not for the nav. "Prescribed Music List" alone
+  // never matches someone typing "UIL PML".
+  title: "Texas UIL Prescribed Music List (PML) — Searchable",
   description:
-    "Browse the Texas UIL Prescribed Music List with performance counts and contest averages for every piece.",
+    "The complete Texas UIL Prescribed Music List: every band, choir and " +
+    "orchestra piece with its grade, how many times it has been performed at " +
+    "contest, and the ratings those performances earned. Search by title, " +
+    "composer, grade or event.",
+  // Bare /pml, so the sort/filter/page permutations do not compete with it.
+  alternates: { canonical: "/pml" },
+  openGraph: {
+    title: "Texas UIL Prescribed Music List (PML)",
+    description:
+      "Every piece on the UIL PML with grade, performance count and contest averages.",
+    url: "/pml",
+  },
 };
 
 const PAGE_SIZE = 50;

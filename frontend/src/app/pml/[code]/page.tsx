@@ -12,6 +12,7 @@ import {
 } from "@/lib/db";
 import { formatNumber, formatScore, pct } from "@/lib/format";
 import { SongYearly } from "@/components/charts/SongYearly";
+import { SongStructuredData } from "@/components/StructuredData";
 import {
   Card,
   DataCard,
@@ -29,10 +30,39 @@ type Props = { params: Promise<{ code: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { code } = await params;
   const song = await getSong(decodeURIComponent(code));
-  if (!song) return { title: "Song not found" };
+  if (!song) return { title: "Song not found", robots: { index: false } };
+
+  const by = song.composer ? ` by ${song.composer}` : "";
+  // The long tail is people searching one piece by name, so the title leads
+  // with it and the description carries the facts they came for -- grade,
+  // event, how often it is programmed, how it scores.
+  const title = `${song.title}${by} — UIL Grade ${song.grade} ${song.event_name}`;
+  const parts = [
+    `${song.title}${by} is a grade ${song.grade} ${song.event_name.toLowerCase()} piece on the Texas UIL Prescribed Music List.`,
+  ];
+  if (song.performance_count > 0) {
+    parts.push(
+      `Performed ${song.performance_count.toLocaleString()} times at UIL contest` +
+        (song.average_concert_score
+          ? `, averaging ${song.average_concert_score.toFixed(2)} in concert.`
+          : "."),
+    );
+  } else {
+    parts.push("No recorded UIL contest performances yet.");
+  }
+  if (song.on_current_pml === 0) {
+    parts.push("No longer on the current PML.");
+  }
+
   return {
-    title: song.title,
-    description: `UIL performance history for ${song.title} by ${song.composer}.`,
+    title,
+    description: parts.join(" "),
+    alternates: { canonical: `/pml/${encodeURIComponent(song.code)}` },
+    openGraph: {
+      title,
+      description: parts.join(" "),
+      url: `/pml/${encodeURIComponent(song.code)}`,
+    },
   };
 }
 
@@ -51,6 +81,15 @@ export default async function SongPage({ params }: Props) {
 
   return (
     <div className="grid gap-6">
+      <SongStructuredData
+        title={song.title}
+        composer={song.composer}
+        eventName={song.event_name}
+        grade={song.grade}
+        code={song.code}
+        performances={summary.performances}
+        averageConcert={summary.avgConcert}
+      />
       <div>
         <Link
           href="/pml"
