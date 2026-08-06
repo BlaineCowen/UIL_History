@@ -29,7 +29,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // An incomplete sitemap is a minor SEO setback; a failed build is total.
   let songs: Awaited<ReturnType<typeof getSongs>> = [];
   try {
-    songs = await getSongs({ includeDelisted: true }, "performance_count", "desc", 20000, 0);
+    songs = await getSongs({}, "performance_count", "desc", 20000, 0);
   } catch (err) {
     console.error("[sitemap] song query failed, serving static routes only", err);
   }

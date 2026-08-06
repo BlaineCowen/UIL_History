@@ -121,6 +121,7 @@ export default async function SongPage({ params }: Props) {
           previousGrade={song.previous_grade}
           grade={song.grade}
           changedFrom={song.grade_changed_from}
+          changedTo={song.grade_changed_to}
         />
       </header>
 

@@ -23,7 +23,7 @@ export function SongFilters({
   const sevent = searchParams.get("sevent") ?? "";
   const acc = searchParams.get("acc") ?? "";
   const minp = Number(searchParams.get("minp") ?? 0);
-  const showDelisted = searchParams.get("delisted") === "1";
+  const hideDelisted = searchParams.get("hide_delisted") === "1";
   const isChorus = sevent.toLowerCase().includes("chorus") || sevent.toLowerCase().includes("madrigal");
 
   function push(updates: Record<string, string | number | undefined>) {
@@ -32,7 +32,7 @@ export function SongFilters({
     );
   }
 
-  const dirty = ["gmin", "gmax", "sevent", "acc", "minp", "q", "delisted"].some(
+  const dirty = ["gmin", "gmax", "sevent", "acc", "minp", "q", "hide_delisted"].some(
     (k) => searchParams.get(k),
   );
 
@@ -127,17 +127,17 @@ export function SongFilters({
 
         <button
           type="button"
-          onClick={() => push({ delisted: showDelisted ? undefined : "1" })}
-          aria-pressed={showDelisted}
+          onClick={() => push({ hide_delisted: hideDelisted ? undefined : "1" })}
+          aria-pressed={hideDelisted}
           className="tap-sm inline-flex items-center gap-1.5 rounded-full border px-3 text-[13px] transition"
           style={{
-            background: showDelisted ? "var(--series-1)" : "var(--surface)",
-            color: showDelisted ? "#fff" : "var(--ink-2)",
-            borderColor: showDelisted ? "var(--series-1)" : "var(--border-strong)",
+            background: hideDelisted ? "var(--series-1)" : "var(--surface)",
+            color: hideDelisted ? "#fff" : "var(--ink-2)",
+            borderColor: hideDelisted ? "var(--series-1)" : "var(--border-strong)",
           }}
-          title="Pieces removed from the PML keep their contest history"
+          title="Show only pieces that can still be programmed for contest"
         >
-          Include delisted
+          Current PML only
         </button>
 
         {dirty && (

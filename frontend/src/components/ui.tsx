@@ -338,17 +338,26 @@ export function JudgeScores({
  * someone would look it up. The Maiden in the Tower has 109 performances
  * across 2005-2026 and is off the current list.
  */
+/** "2019-03" -> "2019", "2025-2026" -> "2025-2026". */
+function editionYear(label: string): string {
+  const m = /^(\d{4})(?:-(\d{4}))?/.exec(label);
+  if (!m) return label;
+  return m[2] ? `${m[1]}-${m[2]}` : m[1];
+}
+
 export function PmlStatus({
   onCurrent,
   previousGrade,
   grade,
   changedFrom,
+  changedTo,
   compact = false,
 }: {
   onCurrent: number | null | undefined;
   previousGrade?: number | null;
   grade?: number | null;
   changedFrom?: string | null;
+  changedTo?: string | null;
   compact?: boolean;
 }) {
   const delisted = onCurrent === 0;
@@ -397,11 +406,16 @@ export function PmlStatus({
         >
           <strong>
             Re-graded from {previousGrade} to {grade}
-          </strong>
-          {changedFrom ? ` since the ${changedFrom} list.` : "."}{" "}
+          </strong>{" "}
           {previousGrade != null && grade != null && grade > previousGrade
-            ? "UIL now considers it harder than it did."
-            : "UIL now considers it easier than it did."}
+            ? "— UIL considers it harder than it used to."
+            : "— UIL considers it easier than it used to."}{" "}
+          {/* Two snapshots seven years apart is all we have, so the change is
+              bracketed rather than dated. Saying "since the 2019 list" would
+              imply we know it happened then. */}
+          {changedFrom && changedTo
+            ? `The change happened sometime between the ${editionYear(changedFrom)} and ${editionYear(changedTo)} lists — those are the only two editions on record, so the exact year is unknown.`
+            : ""}
         </div>
       )}
     </div>

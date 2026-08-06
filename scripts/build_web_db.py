@@ -106,6 +106,7 @@ SONG_COLUMNS = [
     "on_current_pml",
     "previous_grade",
     "grade_changed_from",
+    "grade_changed_to",
 ]
 
 def attach_pml_status(pml_df):
@@ -114,7 +115,12 @@ def attach_pml_status(pml_df):
     Adds three columns:
       on_current_pml     1 if present in the newest edition, else 0
       previous_grade     its grade in the preceding edition, when it differs
-      grade_changed_from that edition's label, so the UI can say when
+      grade_changed_from the older edition's label
+      grade_changed_to   the newer edition's label
+
+    Both labels are carried because a re-grade is only known to have happened
+    *somewhere between* two snapshots. With editions seven years apart, naming
+    one of them implies a precision the data does not have.
 
     A song absent from the newest edition has been delisted -- it keeps all its
     contest history and stays reachable, it simply cannot be programmed now.
@@ -124,6 +130,7 @@ def attach_pml_status(pml_df):
     pml_df["on_current_pml"] = 1
     pml_df["previous_grade"] = None
     pml_df["grade_changed_from"] = None
+    pml_df["grade_changed_to"] = None
 
     # Own connection: the caller closes its handle before this runs, and
     # depending on that ordering is how this broke the first time.
@@ -175,6 +182,7 @@ def attach_pml_status(pml_df):
         changed = prev_series.notna() & now_series.notna() & (prev_series != now_series)
         pml_df.loc[changed, "previous_grade"] = prev_series[changed].astype(int)
         pml_df.loc[changed, "grade_changed_from"] = prev_label
+        pml_df.loc[changed, "grade_changed_to"] = newest_label
         print(f"  PML: {int(changed.sum())} songs re-graded since {prev_label}")
 
     delisted = int((pml_df["on_current_pml"] == 0).sum())
