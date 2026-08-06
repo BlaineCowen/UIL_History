@@ -217,8 +217,13 @@ export type Song = {
   on_current_pml: number;
   /** Its grade in the previous edition, when that differs from now. */
   previous_grade: number | null;
-  /** Which edition it changed from, so the note can say when. */
+  /**
+   * The two editions the change is bracketed by. A re-grade is only known to
+   * have happened somewhere between two snapshots, so both are carried and
+   * the UI states a range rather than a date.
+   */
   grade_changed_from: string | null;
+  grade_changed_to: string | null;
 };
 
 /* --------------------------------------------------------------- helpers */
@@ -560,11 +565,13 @@ export type SongFilters = {
   minPerformances?: number;
   accompaniment?: "accompanied" | "acappella";
   /**
-   * Delisted pieces are excluded by default: a director browsing for
-   * repertoire cannot programme them. They stay reachable by URL, and by
-   * setting this, because their contest history is still worth reading.
+   * Delisted pieces are INCLUDED by default. Hiding them made search fail in
+   * the obvious case: searching "hi-o" returned nothing even though the piece
+   * exists and has 114 performances. Being unable to programme something is
+   * not a reason to be unable to find it -- the marker in the list says which
+   * are delisted, and this hides them for anyone actually picking repertoire.
    */
-  includeDelisted?: boolean;
+  hideDelisted?: boolean;
 };
 
 function buildSongWhere(f: SongFilters): Where {
@@ -595,7 +602,7 @@ function buildSongWhere(f: SongFilters): Where {
   // ILIKE, not LIKE: `specification` is raw source text of mixed case, and
   // SQLite's LIKE matched it case-insensitively. Plain LIKE here silently
   // returned nothing.
-  if (!f.includeDelisted) {
+  if (f.hideDelisted) {
     clauses.push("on_current_pml = 1");
   }
   if (f.accompaniment === "acappella") {
@@ -642,7 +649,7 @@ async function _getSongs(
     `SELECT code, event_name, title, composer, arranger, publisher, grade,
             specification, performance_count, average_concert_score,
             average_sight_reading_score, song_score, earliest_year,
-            on_current_pml, previous_grade, grade_changed_from
+            on_current_pml, previous_grade, grade_changed_from, grade_changed_to
      FROM songs ${sql}
      ORDER BY ${order} NULLS LAST, lower(title) ASC
      LIMIT ? OFFSET ?`,
@@ -679,7 +686,7 @@ async function _getSong(code: string): Promise<Song | undefined> {
     `SELECT code, event_name, title, composer, arranger, publisher, grade,
             specification, performance_count, average_concert_score,
             average_sight_reading_score, song_score, earliest_year,
-            on_current_pml, previous_grade, grade_changed_from
+            on_current_pml, previous_grade, grade_changed_from, grade_changed_to
      FROM songs WHERE code = ?`,
     [code],
   );
