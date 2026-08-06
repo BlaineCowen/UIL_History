@@ -122,7 +122,7 @@ export default async function ResultsPage({
         </h1>
         <p className="text-sm max-w-2xl" style={{ color: "var(--ink-2)" }}>
           Every Texas UIL concert and sight-reading entry from {bounds.min} to{" "}
-          {bounds.max}. Ratings run 1 (superior) to 5 — lower is better throughout.
+          {bounds.max}. 
         </p>
       </header>
 
