@@ -23,11 +23,11 @@ export default function AboutPage() {
         <h2 className="text-[15px] font-semibold mb-2">Methodology</h2>
         <p className="text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>
           Results are scraped from the public Texas UIL contest forms and stored
-          in a database. Directors type their repertoire by hand, so the same
+          in a database. Directors often type their repertoire by hand, so the same
           piece appears under many spellings. Each entry&apos;s title and composer
-          text is matched — exactly where possible, fuzzily otherwise — against
-          an official Prescribed Music List code. Grades change and pieces are
-          retired over time, so the matching is good but not perfect.
+          text is matched using fuzzysearch against an official Prescribed Music List 
+          code. Grades change and pieces are retired over time, so the matching is good
+          but not perfect.
         </p>
       </Card>
 
@@ -37,7 +37,9 @@ export default function AboutPage() {
           UIL ratings are ranks, not points: <strong>1 is the best</strong> and 5
           is the worst. Every chart on this site puts 1 at the top for that
           reason. A &quot;sweepstakes&quot; is a 1 in both concert and
-          sight-reading.
+          sight-reading. At a contest, the highest and lowest judges scores are
+          thrown out. Only the final score is shown here, but song score takes the average
+          of the three scores rather than the median.
         </p>
       </Card>
 
@@ -64,7 +66,7 @@ export default function AboutPage() {
           style={{ color: "var(--ink-2)" }}
         >
           <li>
-            Entries missing any of the eight individual judge scores are excluded
+            Entries missing any of the six individual judge scores are excluded
             entirely, so a handful of contests are under-counted.
           </li>
           <li>
@@ -72,7 +74,7 @@ export default function AboutPage() {
             results table, but do not contribute to any song&apos;s statistics.
           </li>
           <li>
-            Solo and small-ensemble events are out of scope — this covers full
+            Solo and small-ensemble events are out of scope. This covers full
             ensembles only.
           </li>
         </ul>
@@ -81,7 +83,7 @@ export default function AboutPage() {
       <Card>
         <h2 className="text-[15px] font-semibold mb-2">Support</h2>
         <p className="text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>
-          This is a personal project, maintained one season at a time. Support
+          This is a personal project, maintained one year at a time. Support
           helps improve the matching, add features, and keep it running.
         </p>
       </Card>
