@@ -262,14 +262,41 @@ def clean_pml(pml):
     return pml
 
 
+# Kept inside main() rather than at module scope: build_web_db.py imports this
+# file for get_db/clean_pml, and Streamlit calls at import time would run
+# during the build.
+MOVED_NOTICE = """
+### This dashboard has moved to [uilpml.com](https://uilpml.com)
+
+**[uilpml.com](https://uilpml.com)** is the same data, rebuilt and kept current:
+
+- The **2026 season** and the current **2025-2026 Prescribed Music List**
+- Pages for every piece — how often it is programmed, and how it scores
+- Songs removed from the PML, and pieces UIL has re-graded
+- Much faster, and it works properly on a phone
+
+This version is no longer updated.
+"""
+
+
+def show_moved_notice():
+    """Point visitors at the new site, on every page."""
+    st.warning(MOVED_NOTICE)
+
+
 def main():
+    show_moved_notice()
+
     st.title("UIL Dashboard")
 
     st.write(
         "Welcome to the UIL Dashboard. This dashboard is designed to help track UIL Concert and Sight Reading results from the state of Texas."
     )
 
-    st.write("Updated for 2025 performances")
+    st.write(
+        "This site is no longer updated — the current version is at "
+        "[uilpml.com](https://uilpml.com)."
+    )
 
     st.page_link("pages/about.py", label="About the dashboard")
 

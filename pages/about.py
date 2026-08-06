@@ -2,6 +2,16 @@ import streamlit as st
 
 
 def main():
+    # Same notice as the home page: this is a second entry point, and someone
+    # arriving here directly should not have to find the home page to learn
+    # the site has moved.
+    st.warning(
+        "### This dashboard has moved to [uilpml.com](https://uilpml.com)\n\n"
+        "The current version has the 2026 season, the 2025-2026 Prescribed "
+        "Music List, and a page for every piece. This version is no longer "
+        "updated."
+    )
+
     st.title("UIL Dashboard")
 
     st.page_link("UIL_dashboard.py", label="Back to home page")
