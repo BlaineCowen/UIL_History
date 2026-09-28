@@ -50,9 +50,15 @@ export function parseEntryFilters(
   };
 }
 
+/**
+ * Far past any real result set, but small enough that the OFFSET it produces
+ * stays a valid bigint -- `?page=1e18` used to make Postgres throw (a 500).
+ */
+const MAX_PAGE = 10_000;
+
 export function parsePage(sp: SearchParams): number {
   const n = num(sp.page) ?? 1;
-  return n < 1 ? 1 : Math.floor(n);
+  return n < 1 ? 1 : Math.min(Math.floor(n), MAX_PAGE);
 }
 
 export function parseSongFilters(sp: SearchParams): SongFilters {

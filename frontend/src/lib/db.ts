@@ -763,9 +763,12 @@ async function _getSongShare(code: string, eventName: string, grade: number) {
            OR code_3 IN (SELECT code FROM songs WHERE grade = ? AND event_name = ?))`,
       [eventName, since, grade, eventName, grade, eventName, grade, eventName],
     ),
+    // Same event as the peers query: a code also appears under other events,
+    // and counting those here overstated the share (past 100% in small groups).
     first<{ n: number }>(
-      `SELECT COUNT(*)::int AS n FROM entries WHERE ${SONG_MATCH} AND year >= ?`,
-      [code, code, code, since],
+      `SELECT COUNT(*)::int AS n FROM entries
+       WHERE ${SONG_MATCH} AND event = ? AND year >= ?`,
+      [code, code, code, eventName, since],
     ),
   ]);
 
