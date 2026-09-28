@@ -78,7 +78,6 @@ export default async function BlainePage({
   const filters = parseEntryFilters(sp, { director: true });
   const { sort, dir } = parseEntrySort(sp);
   const page = parsePage(sp);
-  const bounds = await getYearBounds();
 
   function sortHref(key: EntrySort) {
     const nextDir =
@@ -90,19 +89,18 @@ export default async function BlainePage({
     return `/blaine${buildQuery(sp, { sort: key, dir: nextDir, page: undefined })}`;
   }
 
-  const options = await getFilterOptions(filters.genEvent);
-  const conferences = await getConferences(filters.genEvent, filters.schoolLevel);
-
-  const total = await countEntries(filters);
-  const summary = await getSummary(filters);
-  const roles = await countDirectorRoles(filters);
-  const rows = await getEntriesWithJudges(
-    filters,
-    sort,
-    dir,
-    PAGE_SIZE,
-    (page - 1) * PAGE_SIZE,
-  );
+  // Independent queries, run together rather than one after another -- see
+  // the note on the public results page, which this route mirrors.
+  const [bounds, options, conferences, total, summary, roles, rows] =
+    await Promise.all([
+      getYearBounds(),
+      getFilterOptions(filters.genEvent),
+      getConferences(filters.genEvent, filters.schoolLevel),
+      countEntries(filters),
+      getSummary(filters),
+      countDirectorRoles(filters),
+      getEntriesWithJudges(filters, sort, dir, PAGE_SIZE, (page - 1) * PAGE_SIZE),
+    ]);
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 

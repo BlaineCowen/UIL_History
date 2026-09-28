@@ -25,6 +25,47 @@ import {
   TableScroll,
 } from "@/components/ui";
 
+/**
+ * Without these two exports this route is fully dynamic: every request renders
+ * the page again, and the CDN stores nothing. The runtime logs showed it
+ * plainly -- `cache=MISS` on every hit, never once a HIT. That is affordable
+ * for a page or two and not for 8,395, which is how many song URLs the sitemap
+ * hands to crawlers.
+ *
+ * `generateStaticParams` is what flips the route from dynamic to cached, and
+ * returning an *empty* list is enough to do it. This is the documented
+ * behaviour, not a trick -- "you must always return an array from
+ * generateStaticParams, even if it's empty. Otherwise, the route will be
+ * dynamically rendered." Verified against a production build too: without the
+ * export, repeat requests report no cache header at all; with it returning [],
+ * the first request to a code is a MISS and every one after it is a HIT.
+ *
+ * If Cache Components is ever enabled app-wide, this becomes a build error --
+ * that mode requires at least one param. See the note in db.ts about that
+ * migration; it would want revisiting here at the same time.
+ *
+ * That is why nothing is prerendered here. Listing codes would mean querying
+ * the database during the build, and this project has already had a deploy
+ * broken exactly that way -- see the comment in sitemap.ts. Since an unlisted
+ * code is cached the moment it is first rendered, prerendering would only buy
+ * a faster first visit, and stale entries revalidate in the background rather
+ * than making anyone wait. Not worth reintroducing a build-time dependency on
+ * a reachable database for.
+ */
+export async function generateStaticParams() {
+  return [];
+}
+
+/**
+ * A week, not the data cache's day: this controls how often a *rendered page*
+ * is thrown away, and re-rendering 8,395 of them daily is the cost this change
+ * exists to remove. As with the data cache, the real invalidation is
+ * `revalidateTag(CONTEST_DATA_TAG)` from /api/revalidate after a load -- every
+ * query this page makes is tagged, so dropping the tag drops these pages too.
+ * This is only the backstop for a load that forgets to call it.
+ */
+export const revalidate = 604800;
+
 type Props = { params: Promise<{ code: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -71,11 +112,17 @@ export default async function SongPage({ params }: Props) {
   const song = await getSong(decodeURIComponent(code));
   if (!song) notFound();
 
-  const summary = await getSongSummary(song.code);
-  const yearly = await getSongYearly(song.code);
-  const performances = await getSongPerformances(song.code);
-  const share = await getSongShare(song.code, song.event_name, song.grade);
-  const topSchools = await getSongTopSchools(song.code);
+  // In parallel: five independent queries that were previously awaited one
+  // after another, so the page waited for the sum of them. Only `song` has to
+  // come first -- getSongShare needs its event and grade. A cached render is
+  // now the one MISS a code ever costs, so it is worth it being short.
+  const [summary, yearly, performances, share, topSchools] = await Promise.all([
+    getSongSummary(song.code),
+    getSongYearly(song.code),
+    getSongPerformances(song.code),
+    getSongShare(song.code, song.event_name, song.grade),
+    getSongTopSchools(song.code),
+  ]);
 
   const neverPerformed = summary.performances === 0;
 

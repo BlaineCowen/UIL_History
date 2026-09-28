@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { Analytics } from "@vercel/analytics/next";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NavLinks } from "@/components/NavLinks";
 import { SiteStructuredData } from "@/components/StructuredData";
@@ -129,6 +130,13 @@ export default function RootLayout({
             </a>
           </div>
         </footer>
+
+        {/*
+          Pageview tracking. The script is only served once Web Analytics is
+          enabled for the project in the Vercel dashboard -- until then this
+          renders nothing, so it is inert rather than broken.
+        */}
+        <Analytics />
       </body>
     </html>
   );

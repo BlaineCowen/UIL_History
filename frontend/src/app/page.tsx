@@ -66,7 +66,38 @@ export default async function ResultsPage({
   const filters = parseEntryFilters(sp);
   const { sort, dir } = parseEntrySort(sp);
   const page = parsePage(sp);
-  const bounds = await getYearBounds();
+
+  /**
+   * All nine of these are independent, and were previously awaited one at a
+   * time -- the page waited for the sum of nine round trips before rendering
+   * anything. They are cached (see db.ts), so this is latency rather than
+   * database load, but it is latency paid on every single request: this route
+   * reads searchParams and so renders fresh every time, unlike /pml/[code].
+   *
+   * The baseline series is deliberately the same query with every filter but
+   * the ensemble dropped, so it stays a separate call rather than a slice.
+   */
+  const [
+    bounds,
+    options,
+    conferences,
+    total,
+    summary,
+    rows,
+    selected,
+    baseline,
+    distribution,
+  ] = await Promise.all([
+    getYearBounds(),
+    getFilterOptions(filters.genEvent),
+    getConferences(filters.genEvent, filters.schoolLevel),
+    countEntries(filters),
+    getSummary(filters),
+    getEntries(filters, sort, dir, PAGE_SIZE, (page - 1) * PAGE_SIZE),
+    getScoresByYear(filters),
+    getScoresByYear({ genEvent: filters.genEvent }),
+    getDistribution(filters),
+  ]);
 
   /** Re-selecting the active column flips it; a new column starts at its own natural direction. */
   function sortHref(key: EntrySort) {
@@ -79,12 +110,6 @@ export default async function ResultsPage({
     return `/${buildQuery(sp, { sort: key, dir: nextDir, page: undefined })}`;
   }
 
-  const options = await getFilterOptions(filters.genEvent);
-  const conferences = await getConferences(filters.genEvent, filters.schoolLevel);
-
-  const total = await countEntries(filters);
-  const summary = await getSummary(filters);
-  const rows = await getEntries(filters, sort, dir, PAGE_SIZE, (page - 1) * PAGE_SIZE);
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // The table and the phone card list render the same three selections, so
@@ -97,11 +122,6 @@ export default async function ResultsPage({
       { t: r.title_3, c: r.composer_3, code: r.code_3 },
     ].filter((s) => (s.t ?? "").trim()),
   }));
-
-  const selected = await getScoresByYear(filters);
-  // The comparison line is the same ensemble with every other filter removed.
-  const baseline = await getScoresByYear({ genEvent: filters.genEvent });
-  const distribution = await getDistribution(filters);
 
   const narrowed = Object.entries(filters).some(
     ([key, value]) =>
