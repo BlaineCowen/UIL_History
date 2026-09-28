@@ -68,10 +68,15 @@ export default async function PmlPage({
   const { sort, dir } = parseSongSort(sp);
   const page = parsePage(sp);
 
-  const events = await getSongEvents();
-  const total = await countSongs(filters);
-  const rows = await getSongs(filters, sort, dir, PAGE_SIZE, (page - 1) * PAGE_SIZE);
-  const scatter = await getSongScatter(filters, Math.max(10, filters.minPerformances ?? 0));
+  // This route reads searchParams, so it cannot be cached the way /pml/[code]
+  // now is -- every request renders. The four queries are independent, so at
+  // least run them together rather than paying the sum of their latencies.
+  const [events, total, rows, scatter] = await Promise.all([
+    getSongEvents(),
+    countSongs(filters),
+    getSongs(filters, sort, dir, PAGE_SIZE, (page - 1) * PAGE_SIZE),
+    getSongScatter(filters, Math.max(10, filters.minPerformances ?? 0)),
+  ]);
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   function sortHref(key: SongSort) {
