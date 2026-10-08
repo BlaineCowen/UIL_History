@@ -4,13 +4,14 @@ import type { Metadata } from "next";
 import { ArrowLeft } from "lucide-react";
 import {
   getSong,
+  getSongPairings,
   getSongPerformances,
   getSongShare,
   getSongSummary,
   getSongTopSchools,
   getSongYearly,
 } from "@/lib/db";
-import { formatNumber, formatScore, pct } from "@/lib/format";
+import { choice, formatNumber, formatScore, pct } from "@/lib/format";
 import { SongYearly } from "@/components/charts/SongYearly";
 import { SongStructuredData } from "@/components/StructuredData";
 import {
@@ -112,19 +113,33 @@ export default async function SongPage({ params }: Props) {
   const song = await getSong(decodeURIComponent(code));
   if (!song) notFound();
 
-  // In parallel: five independent queries that were previously awaited one
+  // In parallel: six independent queries that were previously awaited one
   // after another, so the page waited for the sum of them. Only `song` has to
   // come first -- getSongShare needs its event and grade. A cached render is
   // now the one MISS a code ever costs, so it is worth it being short.
-  const [summary, yearly, performances, share, topSchools] = await Promise.all([
-    getSongSummary(song.code),
-    getSongYearly(song.code),
-    getSongPerformances(song.code),
-    getSongShare(song.code, song.event_name, song.grade),
-    getSongTopSchools(song.code),
-  ]);
+  const [summary, yearly, performances, share, topSchools, pairings] =
+    await Promise.all([
+      getSongSummary(song.code),
+      getSongYearly(song.code),
+      getSongPerformances(song.code),
+      getSongShare(song.code, song.event_name, song.grade),
+      getSongTopSchools(song.code),
+      getSongPairings(song.code),
+    ]);
 
   const neverPerformed = summary.performances === 0;
+
+  // The rest of each program -- what directors put alongside this piece. The
+  // row matched on this song's code, so dropping that code removes exactly
+  // this piece and leaves the other selections, matched or not.
+  const programs = performances.map((p) => ({
+    p,
+    pairedWith: [
+      { t: p.title_1, c: p.composer_1, code: p.code_1 },
+      { t: p.title_2, c: p.composer_2, code: p.code_2 },
+      { t: p.title_3, c: p.composer_3, code: p.code_3 },
+    ].filter((s) => (s.t ?? "").trim() && s.code !== song.code),
+  }));
 
   return (
     <div className="grid gap-6">
@@ -265,6 +280,42 @@ export default async function SongPage({ params }: Props) {
             </Card>
           </div>
 
+          <Card>
+            <SectionTitle
+              title="Most often paired with"
+              hint="Pieces programmed alongside this one, across every recorded performance."
+            />
+            {pairings.length ? (
+              <ul className="grid gap-x-8 gap-y-2 md:grid-cols-2">
+                {pairings.map((s) => (
+                  <li key={s.code} className="flex items-center gap-3 text-sm">
+                    <Link
+                      href={`/pml/${encodeURIComponent(s.code)}`}
+                      className="min-w-0 flex-1 truncate underline decoration-[var(--border-strong)] underline-offset-2 hover:opacity-70 transition"
+                      title={choice(s.title, s.composer)}
+                    >
+                      {choice(s.title, s.composer)}
+                    </Link>
+                    <span
+                      className="tnum text-xs whitespace-nowrap"
+                      style={{ color: "var(--muted)" }}
+                    >
+                      {s.event_name === song.event_name
+                        ? `Gr ${s.grade}`
+                        : `${s.event_name} · Gr ${s.grade}`}{" "}
+                      · avg {formatScore(s.avgConcert, 1)}
+                    </span>
+                    <span className="tnum font-medium">{s.n}×</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm" style={{ color: "var(--muted)" }}>
+                No matched pieces have been programmed with this one.
+              </p>
+            )}
+          </Card>
+
           <Card padded={false}>
             <div className="p-4 sm:p-5 pb-0">
               <SectionTitle
@@ -281,7 +332,7 @@ export default async function SongPage({ params }: Props) {
                 <table className="w-full text-sm border-separate border-spacing-0">
                   <thead>
                     <tr className="text-left">
-                      {["Year", "School", "Event", "Director", "Class", "Concert", "SR"].map(
+                      {["Year", "School", "Event", "Performed with", "Director", "Class", "Concert", "SR"].map(
                         (h) => (
                           <th
                             key={h}
@@ -295,7 +346,7 @@ export default async function SongPage({ params }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {performances.map((p) => (
+                    {programs.map(({ p, pairedWith }) => (
                       <tr key={p.entry_number}>
                         <td className="tnum whitespace-nowrap border-b py-2.5 pr-4">
                           {p.year}
@@ -316,6 +367,9 @@ export default async function SongPage({ params }: Props) {
                           style={{ color: "var(--ink-2)" }}
                         >
                           {p.event}
+                        </td>
+                        <td className="border-b py-2.5 pr-4 min-w-[240px]">
+                          <PairedWith songs={pairedWith} />
                         </td>
                         <td
                           className="border-b py-2.5 pr-4 min-w-[130px]"
@@ -342,7 +396,7 @@ export default async function SongPage({ params }: Props) {
               </TableScroll>
 
               <DataList>
-                {performances.map((p) => (
+                {programs.map(({ p, pairedWith }) => (
                   <DataCard key={p.entry_number}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -369,6 +423,17 @@ export default async function SongPage({ params }: Props) {
                         <RatingCell label="SR" score={p.sight_reading_final_score} />
                       </div>
                     </div>
+                    {pairedWith.length > 0 && (
+                      <div className="grid gap-1 pt-0.5">
+                        <p
+                          className="text-[11px] font-semibold uppercase tracking-wide"
+                          style={{ color: "var(--muted)" }}
+                        >
+                          Performed with
+                        </p>
+                        <PairedWith songs={pairedWith} />
+                      </div>
+                    )}
                   </DataCard>
                 ))}
               </DataList>
@@ -377,6 +442,34 @@ export default async function SongPage({ params }: Props) {
         </>
       )}
     </div>
+  );
+}
+
+function PairedWith({
+  songs,
+}: {
+  songs: { t: string; c: string; code: string }[];
+}) {
+  if (!songs.length) {
+    return <span style={{ color: "var(--muted)" }}>—</span>;
+  }
+  return (
+    <ul className="grid gap-0.5">
+      {songs.map((s, i) => (
+        <li key={i} className="text-[13px] leading-snug">
+          {s.code ? (
+            <Link
+              href={`/pml/${encodeURIComponent(s.code)}`}
+              className="underline decoration-[var(--border-strong)] underline-offset-2 hover:opacity-70 transition"
+            >
+              {choice(s.t, s.c)}
+            </Link>
+          ) : (
+            choice(s.t, s.c)
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
