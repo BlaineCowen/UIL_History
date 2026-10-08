@@ -715,7 +715,8 @@ async function _getSongPerformances(code: string, limit = 250) {
   return rows<Entry>(
     `SELECT entry_number, year, event, school, city, conference, classification,
             director, concert_final_score, sight_reading_final_score,
-            title_1, title_2, title_3, composer_1, composer_2, composer_3
+            title_1, title_2, title_3, composer_1, composer_2, composer_3,
+            code_1, code_2, code_3
      FROM entries WHERE ${SONG_MATCH}
      ORDER BY year DESC, lower(btrim(school)) ASC LIMIT ?`,
     [code, code, code, limit],
@@ -788,6 +789,34 @@ async function _getSongTopSchools(code: string, limit = 8) {
   );
 }
 
+/**
+ * The pieces most often programmed alongside this one, across every
+ * performance -- not just the recent rows the table shows. Only matched codes
+ * count: free-text selections cannot be grouped reliably.
+ */
+async function _getSongPairings(code: string, limit = 8) {
+  return rows<{
+    code: string;
+    title: string;
+    composer: string;
+    grade: number;
+    event_name: string;
+    n: number;
+    avgConcert: number;
+  }>(
+    `SELECT s.code, s.title, s.composer, s.grade, s.event_name,
+            COUNT(DISTINCT e.entry_number)::int AS n,
+            AVG(e.concert_final_score)::float8 AS "avgConcert"
+     FROM entries e
+     CROSS JOIN LATERAL (VALUES (e.code_1), (e.code_2), (e.code_3)) AS v(code)
+     JOIN songs s ON s.code = v.code
+     WHERE ${SONG_MATCH} AND v.code <> ?
+     GROUP BY s.code, s.title, s.composer, s.grade, s.event_name
+     ORDER BY n DESC, s.title ASC LIMIT ?`,
+    [code, code, code, code, limit],
+  );
+}
+
 /* --- cached exports ------------------------------------------------ */
 
 // Each wraps the implementation above; signatures are inferred, so callers
@@ -806,6 +835,7 @@ export const getSongSummary = cached("getSongSummary", _getSongSummary);
 export const getSongYearly = cached("getSongYearly", _getSongYearly);
 export const getSongShare = cached("getSongShare", _getSongShare);
 export const getSongTopSchools = cached("getSongTopSchools", _getSongTopSchools);
+export const getSongPairings = cached("getSongPairings", _getSongPairings);
 export const getSong = cached("getSong", _getSong);
 
 // Row fetches too: the residual scans after caching the aggregates were all
