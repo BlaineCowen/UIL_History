@@ -622,6 +622,35 @@ async function _getSongEvents(): Promise<{ event_name: string; n: number }[]> {
   );
 }
 
+export type SongCategory = {
+  event_name: string;
+  grade: number;
+  /** Pieces at this event and grade on the current PML. */
+  current: number;
+  /** Of those, how many have at least one recorded contest performance. */
+  performed: number;
+  /** Pieces that used to be listed here and have since been dropped. */
+  delisted: number;
+};
+
+/**
+ * Every event x grade pairing, for the /lists pages and sitemap. Grades outside
+ * 1-6 are source-data noise (a handful of chorus rows carry grade 0) and would
+ * otherwise mint a "Grade 0" page.
+ */
+async function _getSongCategories(): Promise<SongCategory[]> {
+  return rows<SongCategory>(
+    `SELECT event_name, grade,
+            COUNT(*) FILTER (WHERE on_current_pml = 1)::int AS current,
+            COUNT(*) FILTER (WHERE on_current_pml = 1 AND performance_count > 0)::int AS performed,
+            COUNT(*) FILTER (WHERE on_current_pml = 0)::int AS delisted
+     FROM songs
+     WHERE event_name != '' AND grade BETWEEN 1 AND 6
+     GROUP BY event_name, grade
+     ORDER BY event_name, grade`,
+  );
+}
+
 async function _countSongs(f: SongFilters): Promise<number> {
   const { sql, params } = buildSongWhere(f);
   const row = await first<{ n: number }>(
@@ -830,6 +859,7 @@ export const getSummary = cached("getSummary", _getSummary);
 export const getScoresByYear = cached("getScoresByYear", _getScoresByYear);
 export const getDistribution = cached("getDistribution", _getDistribution);
 export const getSongEvents = cached("getSongEvents", _getSongEvents);
+export const getSongCategories = cached("getSongCategories", _getSongCategories);
 export const countSongs = cached("countSongs", _countSongs);
 export const getSongSummary = cached("getSongSummary", _getSongSummary);
 export const getSongYearly = cached("getSongYearly", _getSongYearly);

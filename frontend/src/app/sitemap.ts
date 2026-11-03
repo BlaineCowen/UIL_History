@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
-import { getSongs } from "@/lib/db";
+import { getSongCategories, getSongs } from "@/lib/db";
+import { groupByEvent, listHref } from "@/lib/lists";
 import { SITE_URL } from "@/lib/site";
 
 /**
@@ -28,14 +29,35 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Never let a database problem take the sitemap -- or a deploy -- down.
   // An incomplete sitemap is a minor SEO setback; a failed build is total.
   let songs: Awaited<ReturnType<typeof getSongs>> = [];
+  let categories: Awaited<ReturnType<typeof getSongCategories>> = [];
   try {
-    songs = await getSongs({}, "performance_count", "desc", 20000, 0);
+    [songs, categories] = await Promise.all([
+      getSongs({}, "performance_count", "desc", 20000, 0),
+      getSongCategories(),
+    ]);
   } catch (err) {
     console.error("[sitemap] song query failed, serving static routes only", err);
   }
 
+  // The per-grade lists are the pages built to rank for "UIL grade N <event>"
+  // searches, so they sit just below /pml rather than with the song pages.
+  const listRoutes: MetadataRoute.Sitemap = groupByEvent(
+    categories.filter((c) => c.current > 0),
+  ).flatMap(({ eventName, grades }) => [
+    { url: `${SITE_URL}${listHref(eventName)}`, changeFrequency: "yearly" as const, priority: 0.8 },
+    ...grades.map((g) => ({
+      url: `${SITE_URL}${listHref(eventName, g.grade)}`,
+      changeFrequency: "yearly" as const,
+      priority: 0.8,
+    })),
+  ]);
+
   return [
     ...staticRoutes,
+    ...(listRoutes.length
+      ? [{ url: `${SITE_URL}/lists`, changeFrequency: "yearly" as const, priority: 0.8 }]
+      : []),
+    ...listRoutes,
     ...songs.map((s) => ({
       url: `${SITE_URL}/pml/${encodeURIComponent(s.code)}`,
       changeFrequency: "yearly" as const,
