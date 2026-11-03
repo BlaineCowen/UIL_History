@@ -12,6 +12,7 @@ import {
   getSongYearly,
 } from "@/lib/db";
 import { choice, formatNumber, formatScore, pct } from "@/lib/format";
+import { OG_IMAGE } from "@/lib/site";
 import { SongYearly } from "@/components/charts/SongYearly";
 import { SongStructuredData } from "@/components/StructuredData";
 import {
@@ -104,6 +105,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title,
       description: parts.join(" "),
       url: `/pml/${encodeURIComponent(song.code)}`,
+      images: OG_IMAGE,
     },
   };
 }

@@ -25,6 +25,13 @@ export const SITE_DESCRIPTION =
   "Concert & Sight-Reading contest results — every piece, its grade, how " +
   "often it has been performed, and how those performances scored.";
 
+/**
+ * The share card from app/opengraph-image.tsx. Next only applies it to pages
+ * that don't set their own `openGraph` -- a page that does replaces the whole
+ * object, image included -- so those pages must list it themselves.
+ */
+export const OG_IMAGE = "/opengraph-image";
+
 export function canonical(path: string): string {
   return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
