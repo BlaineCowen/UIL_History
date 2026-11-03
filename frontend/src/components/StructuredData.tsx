@@ -106,3 +106,29 @@ export function SongStructuredData({
   }
   return <Ld data={data} />;
 }
+
+/**
+ * The trail above a result in Google ("uilpml.com › Lists › Concert Band"),
+ * shown in place of the raw URL. Paths are site-relative; the last crumb is
+ * the page itself.
+ */
+export function BreadcrumbStructuredData({
+  crumbs,
+}: {
+  crumbs: { name: string; path: string }[];
+}) {
+  return (
+    <Ld
+      data={{
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: crumbs.map((c, i) => ({
+          "@type": "ListItem",
+          position: i + 1,
+          name: c.name,
+          item: canonical(c.path),
+        })),
+      }}
+    />
+  );
+}

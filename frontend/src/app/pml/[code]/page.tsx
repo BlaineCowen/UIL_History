@@ -12,6 +12,7 @@ import {
   getSongYearly,
 } from "@/lib/db";
 import { choice, formatNumber, formatScore, pct } from "@/lib/format";
+import { listHref } from "@/lib/lists";
 import { OG_IMAGE } from "@/lib/site";
 import { SongYearly } from "@/components/charts/SongYearly";
 import { SongStructuredData } from "@/components/StructuredData";
@@ -154,7 +155,7 @@ export default async function SongPage({ params }: Props) {
         performances={summary.performances}
         averageConcert={summary.avgConcert}
       />
-      <div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <Link
           href="/pml"
           className="inline-flex items-center gap-1.5 text-sm transition hover:opacity-70"
@@ -163,6 +164,17 @@ export default async function SongPage({ params }: Props) {
           <ArrowLeft size={15} aria-hidden />
           All songs
         </Link>
+        {/* Also the main internal link into the per-grade lists, which is how
+            crawlers weigh them -- 8,000 song pages each pointing at one. */}
+        {song.grade >= 1 && song.grade <= 6 && (
+          <Link
+            href={listHref(song.event_name, song.grade)}
+            className="text-sm underline underline-offset-2 hover:no-underline"
+            style={{ color: "var(--ink-2)" }}
+          >
+            Grade {song.grade} {song.event_name} list
+          </Link>
+        )}
       </div>
 
       <header className="grid gap-3">

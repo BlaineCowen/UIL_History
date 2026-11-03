@@ -94,7 +94,12 @@ export default async function PmlPage({
         </h1>
         <p className="text-sm max-w-2xl" style={{ color: "var(--ink-2)" }}>
           Every ensemble piece on the UIL PML, with how often it has been performed
-          and how those performances scored. Select a title for its full history.
+          and how those performances scored. Select a title for its full history,
+          or{" "}
+          <Link href="/lists" className="underline underline-offset-2 hover:no-underline">
+            browse by event and grade
+          </Link>
+          .
         </p>
       </header>
 
