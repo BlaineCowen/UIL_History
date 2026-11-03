@@ -15,6 +15,7 @@ import {
   type SearchParams,
 } from "@/lib/params";
 import { formatNumber, formatScore } from "@/lib/format";
+import { OG_IMAGE } from "@/lib/site";
 import { SongFilters } from "@/components/SongFilters";
 import { SongScatter } from "@/components/charts/SongScatter";
 import {
@@ -45,6 +46,7 @@ export const metadata: Metadata = {
     description:
       "Every piece on the UIL PML with grade, performance count and contest averages.",
     url: "/pml",
+    images: OG_IMAGE,
   },
 };
 
